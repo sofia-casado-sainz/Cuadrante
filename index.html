@@ -65,25 +65,31 @@
   .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
   .panel-head h2{ font-size:18px; font-weight:600; }
   .muted{ color:var(--ink-faint); font-size:12.5px; }
-  .btn{ font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); }
+  .btn{ font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); transition:background-color .15s ease, filter .15s ease, transform .1s ease, border-color .15s ease; }
   .btn:hover{ background:var(--surface-2); }
+  .btn:active{ transform:scale(.96); }
+  .btn:disabled{ opacity:.6; cursor:default; transform:none; }
   .btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
   .btn.primary:hover{ filter:brightness(1.08); }
   .btn.ghost{ border-color:transparent; background:transparent; padding:6px 8px;}
   .btn.small{ padding:5px 9px; font-size:12px; }
+
+  @keyframes itemIn{ from{opacity:0; transform:translateY(5px);} to{opacity:1; transform:none;} }
+  @keyframes fadeSlide{ from{opacity:0; transform:translateX(8px);} to{opacity:1; transform:none;} }
   .checkline{ display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-dim); }
 
   .bucket-label{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:16px 0 6px; font-weight:600; }
   .bucket-label:first-child{ margin-top:0; }
-  .task-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); }
+  .task-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); animation:itemIn .3s ease both; }
   .task-row:last-child{ border-bottom:none; }
   .task-row input[type=checkbox]{ width:19px; height:19px; margin-top:2px; accent-color:var(--accent); flex:none; cursor:pointer; }
   .task-main{ flex:1; min-width:0; }
-  .task-title{ font-size:14.5px; font-weight:500; line-height:1.35; }
+  .task-title{ font-size:14.5px; font-weight:500; line-height:1.35; transition:color .3s ease; }
   .task-row.done .task-title{ text-decoration:line-through; color:var(--ink-faint); }
   .task-meta{ display:flex; align-items:center; gap:8px; margin-top:4px; flex-wrap:wrap; }
-  .pill{ font-size:11px; font-weight:500; padding:2px 8px; border-radius:99px; border:1px solid transparent; cursor:default; }
+  .pill{ font-size:11px; font-weight:500; padding:2px 8px; border-radius:99px; border:1px solid transparent; cursor:default; transition:transform .15s ease; }
   .pill.editable{ cursor:pointer; }
+  .pill.editable:hover{ transform:scale(1.06); }
   .due{ font-size:11.5px; color:var(--ink-dim); }
   .due.urgent{ color:var(--red); font-weight:600; }
   .due.soon{ color:var(--orange); font-weight:600; }
@@ -100,26 +106,33 @@
 
   .cal-nav{ display:flex; align-items:center; gap:10px; }
   .cal-nav .label{ font-family:'Fraunces',serif; font-size:16px; font-weight:600; min-width:150px; text-align:center; }
+  .cal-stats{ font-size:12px; color:var(--ink-dim); margin-bottom:2px; }
+  .cal-stats b{ color:var(--ink); }
   .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-top:10px; }
+  .cal-grid.cal-anim{ animation:fadeSlide .22s ease; }
   .cal-dow{ font-size:10.5px; text-align:center; color:var(--ink-faint); font-weight:600; text-transform:uppercase; }
-  .cal-day{ aspect-ratio:1; border-radius:9px; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:5px 2px; font-size:12px; cursor:pointer; position:relative; }
+  .cal-day{ aspect-ratio:1; border-radius:9px; border:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:5px 2px; font-size:12px; cursor:pointer; position:relative; transition:transform .12s ease, background-color .15s ease, border-color .15s ease; }
+  .cal-day:active{ transform:scale(.92); }
   .cal-day.other-month{ opacity:.32; }
   .cal-day.today{ border-color:var(--accent); border-width:2px; }
   .cal-day.selected{ background:var(--accent-tint); }
   .cal-dots{ display:flex; gap:2px; margin-top:3px; flex-wrap:wrap; justify-content:center; }
   .cal-dot{ width:5px; height:5px; border-radius:50%; }
-  .agenda-day{ margin-top:14px; }
+  .agenda-day{ margin-top:14px; animation:itemIn .25s ease both; }
   .agenda-day h3{ font-size:14px; margin-bottom:6px; }
 
   .horario-wrap{ overflow-x:auto; }
-  .horario-grid{ display:grid; grid-template-columns:44px repeat(5,1fr); min-width:560px; }
-  .h-corner{ height:28px; }
-  .h-dow{ font-size:11.5px; font-weight:600; text-align:center; color:var(--ink-dim); padding-bottom:6px; }
-  .h-hour{ font-size:10px; color:var(--ink-faint); text-align:right; padding-right:6px; position:relative; top:-6px; }
-  .h-col{ position:relative; border-left:1px solid var(--border); background: repeating-linear-gradient(to bottom, transparent, transparent 47px, var(--border) 47px, var(--border) 48px); }
-  .h-block{ position:absolute; left:2px; right:2px; border-radius:7px; padding:4px 6px; font-size:10.5px; line-height:1.25; color:#fff; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.15); }
-  .h-block .t{ font-weight:600; }
-  .h-block .r{ opacity:.85; font-size:9.5px; }
+  .horario-grid{ display:grid; grid-template-columns:28px repeat(5,minmax(46px,1fr)); }
+  .h-corner{ height:24px; }
+  .h-dow{ font-size:10.5px; font-weight:600; text-align:center; color:var(--ink-dim); padding-bottom:6px; }
+  .h-hour{ font-size:8.5px; color:var(--ink-faint); text-align:right; padding-right:3px; position:relative; top:-6px; }
+  .h-col{ position:relative; border-left:1px solid var(--border); background: repeating-linear-gradient(to bottom, transparent, transparent 43px, var(--border) 43px, var(--border) 44px); }
+  .h-block{ position:absolute; left:1px; right:1px; border-radius:6px; padding:3px 4px; font-size:9.5px; line-height:1.2; color:#fff; overflow:hidden; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,.15); animation:itemIn .3s ease both; transition:transform .12s ease, filter .12s ease; }
+  .h-block:hover{ filter:brightness(1.08); }
+  .h-block:active{ transform:scale(1.03); filter:brightness(1.1); }
+  .h-block .t{ font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .h-block .r{ opacity:.85; font-size:8.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .horario-today{ margin-bottom:12px; }
   .sched-form{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
   .sched-form select, .sched-form input{ font-family:inherit; font-size:13px; padding:8px 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%; }
   .sched-form label{ font-size:11px; color:var(--ink-faint); display:block; margin-bottom:3px; }
@@ -128,7 +141,7 @@
   .sched-item{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .sched-item:last-child{ border:none; }
 
-  .aviso-card{ border:1px solid var(--border); border-radius:11px; padding:12px 13px; margin-bottom:9px; background:var(--surface); }
+  .aviso-card{ border:1px solid var(--border); border-radius:11px; padding:12px 13px; margin-bottom:9px; background:var(--surface); animation:itemIn .3s ease both; }
   .aviso-card.unread{ border-left:3px solid var(--accent); }
   .aviso-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
   .aviso-card .t{ font-size:14.5px; font-weight:600; line-height:1.35; }
@@ -232,6 +245,7 @@
         <h2>Calendario de entregas</h2>
         <div class="cal-nav"><button class="btn ghost" id="cal-prev">‹</button><span class="label" id="cal-label"></span><button class="btn ghost" id="cal-next">›</button></div>
       </div>
+      <div class="cal-stats" id="cal-stats"></div>
       <div class="cal-grid" id="cal-dow-row"></div>
       <div class="cal-grid" id="cal-grid"></div>
       <div class="agenda-day" id="agenda-day"></div>
@@ -242,7 +256,8 @@
     <div class="panel">
       <div class="panel-head"><h2>Horario de clases</h2></div>
       <div class="muted" style="line-height:1.5; margin-bottom:8px;">Canvas no trae el horario oficial, así que este lo rellenas tú una vez — se guarda solo.</div>
-            <div class="horario-wrap"><div class="horario-grid" id="horario-grid"></div></div>
+      <div class="horario-today" id="horario-today"></div>
+      <div class="horario-wrap"><div class="horario-grid" id="horario-grid"></div></div>
 
       <div class="panel" id="edit-sched-panel" style="display:none;background:var(--surface-2);margin-top:14px;">
         <div class="panel-head"><h2 style="font-size:15px;">Editar clase</h2></div>
@@ -394,17 +409,24 @@ const db = getFirestore(app);
   // ---------- Tabs ----------
   var tabs = document.querySelectorAll("nav.tabs button");
   var views = document.querySelectorAll("section.view");
+  function activateTab(name){
+    tabs.forEach(function(b){ b.classList.toggle("active", b.dataset.tab===name); });
+    views.forEach(function(v){ v.classList.toggle("active", v.id==="view-"+name); });
+  }
   tabs.forEach(function(btn){
     btn.addEventListener("click", function(){
-      tabs.forEach(function(b){ b.classList.remove("active"); });
-      views.forEach(function(v){ v.classList.remove("active"); });
-      btn.classList.add("active");
-      document.getElementById("view-"+btn.dataset.tab).classList.add("active");
+      activateTab(btn.dataset.tab);
+      try{ localStorage.setItem("cuadrante_last_tab", btn.dataset.tab); }catch(e){}
     });
   });
 
+  // ---------- Preferencias que se recuerdan solas (no hace falta repetirlas cada vez) ----------
   try{
     if(localStorage.getItem("cuadrante_install_dismissed")==="1"){ document.getElementById("install-banner").style.display="none"; }
+    if(localStorage.getItem("cuadrante_hide_done")==="1"){ document.getElementById("hide-done").checked = true; }
+    if(localStorage.getItem("cuadrante_hide_read")==="1"){ document.getElementById("hide-read").checked = true; }
+    var lastTab = localStorage.getItem("cuadrante_last_tab");
+    if(lastTab && document.getElementById("view-"+lastTab)) activateTab(lastTab);
   }catch(e){}
   document.getElementById("install-close").addEventListener("click", function(){
     document.getElementById("install-banner").style.display="none";
@@ -463,7 +485,10 @@ const db = getFirestore(app);
       renderAvisos();
     }, function(){});
   }
-  document.getElementById("hide-read").addEventListener("change", renderAvisos);
+  document.getElementById("hide-read").addEventListener("change", function(){
+    try{ localStorage.setItem("cuadrante_hide_read", this.checked ? "1" : "0"); }catch(e){}
+    renderAvisos();
+  });
 
   function renderAvisos(){
     var box = document.getElementById("avisos-list");
@@ -499,7 +524,10 @@ const db = getFirestore(app);
       renderTasks(); renderCalendar();
     }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
   }
-  document.getElementById("hide-done").addEventListener("change", renderTasks);
+  document.getElementById("hide-done").addEventListener("change", function(){
+    try{ localStorage.setItem("cuadrante_hide_done", this.checked ? "1" : "0"); }catch(e){}
+    renderTasks();
+  });
 
   function bucketOf(task, today){
     if(!task.due_at) return "sinfecha";
@@ -580,6 +608,19 @@ const db = getFirestore(app);
     dowRow.innerHTML = ["L","M","X","J","V","S","D"].map(function(d){ return '<div class="cal-dow">'+d+'</div>'; }).join("");
     var meses=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
     document.getElementById("cal-label").textContent = meses[calMonth.getMonth()]+" "+calMonth.getFullYear();
+    var statsBox = document.getElementById("cal-stats");
+    if(statsBox){
+      var overdue=0, weekCount=0; var statToday = startOfDay(new Date());
+      tasksCache.forEach(function(t){
+        if(t.done || !t.due_at) return;
+        var diff = daysBetween(statToday, new Date(t.due_at));
+        if(diff<0) overdue++; else if(diff<=7) weekCount++;
+      });
+      var parts = [];
+      if(overdue) parts.push('<b style="color:var(--red);">'+overdue+' vencida'+(overdue===1?'':'s')+'</b>');
+      parts.push('<b>'+weekCount+'</b> esta semana');
+      statsBox.innerHTML = parts.join(' · ');
+    }
     var first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
     var gridStart = new Date(first); gridStart.setDate(first.getDate()-((first.getDay()+6)%7));
     var byDay = {};
@@ -597,6 +638,7 @@ const db = getFirestore(app);
       if(i>=34 && d.getMonth()!==calMonth.getMonth() && (i+1)%7===0) break;
     }
     var grid = document.getElementById("cal-grid"); grid.innerHTML = html;
+    grid.classList.remove("cal-anim"); void grid.offsetWidth; grid.classList.add("cal-anim");
     grid.querySelectorAll(".cal-day").forEach(function(cell){
       cell.addEventListener("click", function(){ calSelected = cell.dataset.key; renderCalendar(); renderAgendaDay(cell.dataset.key, byDay[cell.dataset.key]||[]); });
     });
@@ -616,7 +658,19 @@ const db = getFirestore(app);
   }
 
   // ---------- HORARIO ----------
-  var H_START=8, H_END=21, DOWS=["Lunes","Martes","Miércoles","Jueves","Viernes"], HOUR_PX=48;
+  var DOWS=["Lunes","Martes","Miércoles","Jueves","Viernes"], DOWS_SHORT=["Lun","Mar","Mié","Jue","Vie"], HOUR_PX=44;
+  function scheduleHourRange(){
+    var minH = 8, maxH = 21;
+    var relevant = schedCache.filter(function(b){ return DOWS.indexOf(b.day) !== -1; });
+    if(relevant.length){
+      var mins = relevant.map(function(b){ return toMinutes(b.start); });
+      var maxs = relevant.map(function(b){ return toMinutes(b.end); });
+      minH = Math.max(6, Math.floor(Math.min.apply(null, mins)/60) - 1);
+      maxH = Math.min(23, Math.ceil(Math.max.apply(null, maxs)/60) + 1);
+      if(maxH <= minH) maxH = minH + 1;
+    }
+    return {start:minH, end:maxH};
+  }
   (function(){
     var sel = document.getElementById("sched-subject"); var html="";
     SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
@@ -690,12 +744,13 @@ const db = getFirestore(app);
     }, function(){});
   }
   function renderHorario(){
+    var range = scheduleHourRange(); var H_START = range.start, H_END = range.end;
     var grid = document.getElementById("horario-grid");
     var html = '<div class="h-corner"></div>';
-    DOWS.forEach(function(d){ html += '<div class="h-dow">'+d+'</div>'; });
+    DOWS.forEach(function(d,i){ html += '<div class="h-dow" title="'+d+'">'+DOWS_SHORT[i]+'</div>'; });
     var totalH = (H_END-H_START)*HOUR_PX;
     html += '<div style="position:relative;height:'+totalH+'px;">';
-    for(var h=H_START; h<H_END; h++){ html += '<div class="h-hour" style="position:absolute;top:'+((h-H_START)*HOUR_PX)+'px;right:6px;">'+h+':00</div>'; }
+    for(var h=H_START; h<H_END; h++){ html += '<div class="h-hour" style="position:absolute;top:'+((h-H_START)*HOUR_PX)+'px;right:3px;">'+h+'</div>'; }
     html += '</div>';
     DOWS.forEach(function(day){
       html += '<div class="h-col" style="height:'+totalH+'px;">';
@@ -709,6 +764,23 @@ const db = getFirestore(app);
     });
     grid.innerHTML = html;
     grid.querySelectorAll(".h-block").forEach(function(el){ el.addEventListener("click", function(){ openEditSched(el.dataset.id); }); });
+
+    var dowIdx = new Date().getDay();
+    var todayName = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][dowIdx];
+    var todayItems = schedCache.filter(function(b){ return b.day === todayName; }).sort(function(a,b){ return toMinutes(a.start)-toMinutes(b.start); });
+    var todayBox = document.getElementById("horario-today");
+    if(todayBox){
+      if(!todayItems.length){
+        todayBox.innerHTML = '<div class="muted">Hoy ('+todayName+') no tienes clases.</div>';
+      } else {
+        todayBox.innerHTML = '<div class="bucket-label" style="margin:0 0 6px;">Hoy · '+todayName+'</div>' +
+          todayItems.map(function(b){
+            var col = b.color || colorFor(b.subject);
+            return '<div class="sched-item"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:7px;"></span>'+esc(b.subject)+' — '+esc(b.start)+'–'+esc(b.end)+(b.room?(' · '+esc(b.room)):'')+'</span></div>';
+          }).join("");
+      }
+    }
+
     var listBox = document.getElementById("sched-list");
     var sixth = schedCache.filter(function(b){ return b.day==="Sábado" || b.day==="Domingo"; });
     listBox.innerHTML = sixth.length ? ("<div class='muted' style='margin-bottom:6px;'>Fuera de la vista semanal:</div>" +
