@@ -137,7 +137,7 @@
   .sched-form select, .sched-form input{ font-family:inherit; font-size:13px; padding:8px 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%; }
   .sched-form label{ font-size:11px; color:var(--ink-faint); display:block; margin-bottom:3px; }
   .sched-form .full{ grid-column:1 / -1; }
-  .sched-list{ margin-top:14px; }
+  .sched-days{ display:flex; flex-wrap:wrap; gap:4px 14px; }  .sched-list{ margin-top:14px; }
   .sched-item{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .sched-item:last-child{ border:none; }
 
@@ -284,7 +284,18 @@
             <select id="sched-subject"></select>
             <input type="text" id="sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div><label>Día</label><select id="sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div class="full">
+            <label>Días (elige uno o varios)</label>
+            <div class="sched-days">
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Lunes"> Lunes</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Martes"> Martes</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Miércoles"> Miércoles</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Jueves"> Jueves</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Viernes"> Viernes</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Sábado"> Sábado</label>
+              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Domingo"> Domingo</label>
+            </div>
+          </div>
           <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="sched-start" value="09:00"></div>
           <div><label>Hora fin</label><input type="time" id="sched-end" value="10:30"></div>
@@ -791,15 +802,22 @@ const db = getFirestore(app);
       subject = document.getElementById("sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var day = document.getElementById("sched-day").value, room = document.getElementById("sched-room").value.trim();
+    var dayChecks = document.querySelectorAll(".sched-day-check:checked");
+    var days = Array.prototype.map.call(dayChecks, function(c){ return c.value; });
+    if(!days.length){ showError({message:"Elige al menos un día."}); return; }
+    var room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
     var color = document.getElementById("sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-        addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
-      .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; document.getElementById("sched-color").value="#24566A"; })
-      .catch(showError);
+    Promise.all(days.map(function(day){
+      return addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color });
+    })).then(function(){
+      document.getElementById("add-sched-form").reset();
+      document.getElementById("sched-subject-other").style.display="none";
+      document.getElementById("sched-color").value="#24566A";
+    }).catch(showError);
   });
 
   // ---------- Avisos push (iPhone añadido a pantalla de inicio) ----------
