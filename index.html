@@ -435,7 +435,7 @@ const db = getFirestore(app);
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
       renderTasks(); renderCalendar();
-    }, function(){});
+    }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
   }
   document.getElementById("hide-done").addEventListener("change", renderTasks);
 
