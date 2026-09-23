@@ -144,6 +144,10 @@
   .banner .close{ float:right; cursor:pointer; color:var(--ink-faint); font-size:15px; margin-left:8px; }
   .skeleton{ height:14px; background:var(--surface-2); border-radius:5px; margin:8px 0; animation:pulse 1.4s ease-in-out infinite; }
   @keyframes pulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+  
+  #err-toast{ position:fixed; left:16px; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); max-width:520px; margin:0 auto; background:var(--surface); border:1px solid var(--red); color:var(--red); border-radius:11px; padding:11px 14px; font-size:12.5px; line-height:1.5; box-shadow:0 4px 18px rgba(0,0,0,.18); z-index:50; display:none; }
+  #err-toast b{ display:block; margin-bottom:2px; }
+  #err-toast .close{ float:right; cursor:pointer; margin-left:10px; }
 
   /* Más (link-out) */
   .more-card{ display:block; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; background:var(--surface); text-decoration:none; color:var(--ink); }
@@ -269,6 +273,8 @@
 </main>
 </div>
 
+<div id="err-toast"><span class="close" id="err-toast-close">&times;</span><b>No se pudo guardar</b><span id="err-toast-msg"></span></div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
@@ -373,6 +379,20 @@ const db = getFirestore(app);
   var started = false;
   var tasksCache = [], schedCache = [], avisosCache = [];
 
+   var errToastTimer = null;
+  function showError(err){
+    var box = document.getElementById("err-toast");
+    var msg = (err && (err.message || err.code)) ? (err.code ? err.code+" — "+err.message : err.message) : "Error desconocido.";
+    document.getElementById("err-toast-msg").textContent = " " + msg;
+    box.style.display = "block";
+    if(errToastTimer) clearTimeout(errToastTimer);
+    errToastTimer = setTimeout(function(){ box.style.display = "none"; }, 12000);
+  }
+  document.getElementById("err-toast-close").addEventListener("click", function(){
+    document.getElementById("err-toast").style.display = "none";
+    if(errToastTimer) clearTimeout(errToastTimer);
+  });
+
   function fmtSync(iso, kind){
     if(!iso) return "Todavía sin sincronizar — en cuanto tus profesores publiquen " + kind + " en Canvas aparecerán aquí solas.";
     try{ var d = new Date(iso); return "Última sincronización: " + d.toLocaleString("es-ES",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
@@ -413,7 +433,7 @@ const db = getFirestore(app);
     }
     box.innerHTML = items.map(avisoCard).join("");
     box.querySelectorAll("input[type=checkbox][data-avid]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(function(){}); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
     });
   }
   function avisoCard(a){
@@ -462,7 +482,7 @@ const db = getFirestore(app);
     if(!any){ html = '<div class="empty-state"><div class="big">✅</div>'+(tasksCache.length?"No hay tareas pendientes con estos filtros.":"No hay tareas todavía.")+'</div>'; }
     list.innerHTML = html;
     list.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"tasks",cb.dataset.id), {done: cb.checked}).catch(function(){}); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
     list.querySelectorAll(".pill.editable").forEach(function(p){ p.addEventListener("click", function(){ toggleCourseEditor(p); }); });
   }
@@ -493,7 +513,7 @@ const db = getFirestore(app);
     var task = tasksCache.find(function(t){ return t.id===id; });
     if(task && task.course) ed.querySelector("select").value = task.course;
     ed.querySelector("button").addEventListener("click", function(){
-      updateDoc(doc(db,"tasks",id), {course: ed.querySelector("select").value}).catch(function(){});
+      updateDoc(doc(db,"tasks",id), {course: ed.querySelector("select").value}).catch(showError);
       ed.style.display="none";
     });
   }
@@ -504,7 +524,7 @@ const db = getFirestore(app);
     var title = titleEl.value.trim(); if(!title) return;
     var due_at = dateEl.value ? new Date(dateEl.value+"T23:59:00").toISOString() : null;
     addDoc(collection(db,"tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
-      .then(function(){ titleEl.value=""; dateEl.value=""; }).catch(function(){});
+      .then(function(){ titleEl.value=""; dateEl.value=""; }).catch(showError);
   });
 
   // ---------- CALENDARIO ----------
@@ -589,23 +609,29 @@ const db = getFirestore(app);
       html += '</div>';
     });
     grid.innerHTML = html;
-    grid.querySelectorAll(".h-block").forEach(function(el){ el.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",el.dataset.id)).catch(function(){}); }); });
+    grid.querySelectorAll(".h-block").forEach(function(el){ el.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",el.dataset.id)).catch(showError); }); });
     var listBox = document.getElementById("sched-list");
     var sixth = schedCache.filter(function(b){ return b.day==="Sábado" || b.day==="Domingo"; });
     listBox.innerHTML = sixth.length ? ("<div class='muted' style='margin-bottom:6px;'>Fuera de la vista semanal:</div>" +
       sixth.map(function(b){ return '<div class="sched-item"><span>'+esc(b.subject)+' — '+esc(b.day)+' '+esc(b.start)+'–'+esc(b.end)+'</span><button class="btn small" data-del="'+esc(b.id)+'">Eliminar</button></div>'; }).join("")) : "";
-    listBox.querySelectorAll("[data-del]").forEach(function(btn){ btn.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",btn.dataset.del)).catch(function(){}); }); });
+    listBox.querySelectorAll("[data-del]").forEach(function(btn){ btn.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",btn.dataset.del)).catch(showError); }); });
   }
   function toMinutes(hhmm){ var p=(hhmm||"00:00").split(":"); return (+p[0])*60+(+(p[1]||0)); }
 
   document.getElementById("add-sched-form").addEventListener("submit", function(e){
     e.preventDefault();
     var subjSel = document.getElementById("sched-subject"); var subject = subjSel.value;
-    if(subject === "__other__"){ subject = document.getElementById("sched-subject-other").value.trim(); if(!subject) return; }
+    if(subject === "__other__"){
+      subject = document.getElementById("sched-subject-other").value.trim();
+      if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
+    }
     var day = document.getElementById("sched-day").value, room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
-    if(!start || !end || toMinutes(end) <= toMinutes(start)) return;
-    addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:colorFor(subject) }).catch(function(){});
+    if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
+    if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
+    addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:colorFor(subject) })
+      .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; })
+      .catch(showError);
   });
 
 })();
