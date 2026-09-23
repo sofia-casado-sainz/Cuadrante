@@ -239,7 +239,29 @@
     <div class="panel">
       <div class="panel-head"><h2>Horario de clases</h2></div>
       <div class="muted" style="line-height:1.5; margin-bottom:8px;">Canvas no trae el horario oficial, así que este lo rellenas tú una vez — se guarda solo.</div>
-      <div class="horario-wrap"><div class="horario-grid" id="horario-grid"></div></div>
+            <div class="horario-wrap"><div class="horario-grid" id="horario-grid"></div></div>
+
+      <div class="panel" id="edit-sched-panel" style="display:none;background:var(--surface-2);margin-top:14px;">
+        <div class="panel-head"><h2 style="font-size:15px;">Editar clase</h2></div>
+        <form class="sched-form" id="edit-sched-form">
+          <div class="full">
+            <label>Asignatura</label>
+            <select id="edit-sched-subject"></select>
+            <input type="text" id="edit-sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
+          </div>
+          <div><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div><label>Aula (opcional)</label><input type="text" id="edit-sched-room" placeholder="Ej. A-204"></div>
+          <div><label>Hora inicio</label><input type="time" id="edit-sched-start"></div>
+          <div><label>Hora fin</label><input type="time" id="edit-sched-end"></div>
+          <div><label>Color</label><input type="color" id="edit-sched-color"></div>
+          <div class="full" style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn primary" type="submit">Guardar cambios</button>
+            <button class="btn" type="button" id="edit-sched-delete" style="color:var(--red);border-color:var(--red);">Eliminar clase</button>
+            <button class="btn ghost" type="button" id="edit-sched-cancel">Cancelar</button>
+          </div>
+        </form>
+      </div>
+
       <details style="margin-top:14px;">
         <summary class="btn small" style="display:inline-block;">+ Añadir clase</summary>
         <form class="sched-form" id="add-sched-form">
@@ -248,10 +270,11 @@
             <select id="sched-subject"></select>
             <input type="text" id="sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div><label>Día</label><select id="sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option></select></div>
+          <div><label>Día</label><select id="sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
           <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="sched-start" value="09:00"></div>
           <div><label>Hora fin</label><input type="time" id="sched-end" value="10:30"></div>
+          <div><label>Color</label><input type="color" id="sched-color" value="#24566A"></div>
           <div class="full"><button class="btn primary" type="submit">Guardar clase</button></div>
         </form>
       </details>
@@ -313,11 +336,18 @@ const db = getFirestore(app);
   ];
   var PALETTE = ["#24566A","#A8792E","#6E7B4A","#A6402E","#4C6E8C","#7A5C3E","#5C7A63","#8C5A6E","#3E6E5C"];
 
+    var customColors = {};
   function colorFor(name){
     if(!name) return "#8B948A";
+    if(customColors[name]) return customColors[name];
     var idx = SUBJECTS.indexOf(name);
     if(idx === -1){ var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; } idx=h%PALETTE.length; }
     return PALETTE[idx % PALETTE.length];
+  }
+  function saveColor(subject, hex){
+    if(!subject) return;
+    var patch = {}; patch[subject] = hex;
+    setDoc(doc(db,"settings","colors"), patch, {merge:true}).catch(showError);
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
@@ -401,8 +431,15 @@ const db = getFirestore(app);
 
   function startApp(){
     if(started) return; started = true;
-    subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule();
+    subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors();
     renderCalendar();
+  }
+
+  function subscribeColors(){
+    onSnapshot(doc(db,"settings","colors"), function(snap){
+      customColors = snap.exists() ? (snap.data()||{}) : {};
+      renderTasks(); renderAvisos(); renderCalendar(); renderHorario();
+    }, function(){});
   }
 
   function subscribeMeta(){
@@ -580,8 +617,65 @@ const db = getFirestore(app);
     SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
     html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
   })();
-  document.getElementById("sched-subject").addEventListener("change", function(){
+    document.getElementById("sched-subject").addEventListener("change", function(){
     document.getElementById("sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
+    if(this.value !== "__other__") document.getElementById("sched-color").value = colorFor(this.value);
+  });
+
+  (function(){
+    var sel = document.getElementById("edit-sched-subject"); var html="";
+    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
+  })();
+  document.getElementById("edit-sched-subject").addEventListener("change", function(){
+    document.getElementById("edit-sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
+    if(this.value !== "__other__") document.getElementById("edit-sched-color").value = colorFor(this.value);
+  });
+
+  var editingSchedId = null;
+  function openEditSched(id){
+    var b = schedCache.find(function(x){ return x.id===id; });
+    if(!b) return;
+    editingSchedId = id;
+    var sel = document.getElementById("edit-sched-subject");
+    var known = SUBJECTS.indexOf(b.subject) !== -1;
+    sel.value = known ? b.subject : "__other__";
+    document.getElementById("edit-sched-subject-other").style.display = known ? "none" : "block";
+    document.getElementById("edit-sched-subject-other").value = known ? "" : b.subject;
+    document.getElementById("edit-sched-day").value = b.day;
+    document.getElementById("edit-sched-room").value = b.room || "";
+    document.getElementById("edit-sched-start").value = b.start;
+    document.getElementById("edit-sched-end").value = b.end;
+    document.getElementById("edit-sched-color").value = b.color || colorFor(b.subject);
+    document.getElementById("edit-sched-panel").style.display = "block";
+    document.getElementById("edit-sched-panel").scrollIntoView({behavior:"smooth", block:"center"});
+  }
+  function closeEditSched(){
+    editingSchedId = null;
+    document.getElementById("edit-sched-panel").style.display = "none";
+  }
+  document.getElementById("edit-sched-cancel").addEventListener("click", closeEditSched);
+  document.getElementById("edit-sched-delete").addEventListener("click", function(){
+    if(!editingSchedId) return;
+    deleteDoc(doc(db,"schedule",editingSchedId)).then(closeEditSched).catch(showError);
+  });
+  document.getElementById("edit-sched-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    if(!editingSchedId) return;
+    var subjSel = document.getElementById("edit-sched-subject"); var subject = subjSel.value;
+    if(subject === "__other__"){
+      subject = document.getElementById("edit-sched-subject-other").value.trim();
+      if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
+    }
+    var day = document.getElementById("edit-sched-day").value, room = document.getElementById("edit-sched-room").value.trim();
+    var start = document.getElementById("edit-sched-start").value, end = document.getElementById("edit-sched-end").value;
+    var color = document.getElementById("edit-sched-color").value;
+    if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
+    if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
+    saveColor(subject, color);
+    updateDoc(doc(db,"schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+      .then(closeEditSched)
+      .catch(showError);
   });
 
   function subscribeSchedule(){
@@ -609,12 +703,12 @@ const db = getFirestore(app);
       html += '</div>';
     });
     grid.innerHTML = html;
-    grid.querySelectorAll(".h-block").forEach(function(el){ el.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",el.dataset.id)).catch(showError); }); });
+    grid.querySelectorAll(".h-block").forEach(function(el){ el.addEventListener("click", function(){ openEditSched(el.dataset.id); }); });
     var listBox = document.getElementById("sched-list");
     var sixth = schedCache.filter(function(b){ return b.day==="Sábado" || b.day==="Domingo"; });
     listBox.innerHTML = sixth.length ? ("<div class='muted' style='margin-bottom:6px;'>Fuera de la vista semanal:</div>" +
-      sixth.map(function(b){ return '<div class="sched-item"><span>'+esc(b.subject)+' — '+esc(b.day)+' '+esc(b.start)+'–'+esc(b.end)+'</span><button class="btn small" data-del="'+esc(b.id)+'">Eliminar</button></div>'; }).join("")) : "";
-    listBox.querySelectorAll("[data-del]").forEach(function(btn){ btn.addEventListener("click", function(){ deleteDoc(doc(db,"schedule",btn.dataset.del)).catch(showError); }); });
+      sixth.map(function(b){ return '<div class="sched-item"><span>'+esc(b.subject)+' — '+esc(b.day)+' '+esc(b.start)+'–'+esc(b.end)+'</span><button class="btn small" data-edit="'+esc(b.id)+'">Editar</button></div>'; }).join("")) : "";
+    listBox.querySelectorAll("[data-edit]").forEach(function(btn){ btn.addEventListener("click", function(){ openEditSched(btn.dataset.edit); }); });
   }
   function toMinutes(hhmm){ var p=(hhmm||"00:00").split(":"); return (+p[0])*60+(+(p[1]||0)); }
 
@@ -627,10 +721,12 @@ const db = getFirestore(app);
     }
     var day = document.getElementById("sched-day").value, room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
+    var color = document.getElementById("sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
-    addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:colorFor(subject) })
-      .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; })
+    saveColor(subject, color);
+    addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+      .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; document.getElementById("sched-color").value="#24566A"; })
       .catch(showError);
   });
 
