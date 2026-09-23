@@ -162,8 +162,12 @@
 
 <div id="gate">
   <h1>Cuadrante</h1>
-  <p>Tu panel personal de Canvas. Inicia sesión con tu cuenta de Google de la UFV para ver tus tareas y avisos.</p>
-  <button class="btn primary" id="signin">Iniciar sesión con Google</button>
+  <p>Tu panel personal de Canvas. Inicia sesión para ver tus tareas y avisos.</p>
+  <form id="login-form" style="display:flex;flex-direction:column;gap:8px;max-width:280px;margin:0 auto;">
+    <input id="login-email" type="email" value="9206029@alumnos.ufv.es" required>
+    <input id="login-password" type="password" placeholder="Contraseña" required>
+    <button class="btn primary" type="submit">Entrar</button>
+  </form>
   <p id="gate-error" class="muted" style="color:var(--red);"></p>
 </div>
 
@@ -268,7 +272,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, onSnapshot, query, orderBy, limit,
@@ -320,12 +324,12 @@ const db = getFirestore(app);
   function daysBetween(a,b){ return Math.round((startOfDay(b)-startOfDay(a))/86400000); }
 
   // ---------- Auth gate ----------
-  var provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ hd: ALLOWED_EMAIL.split("@")[1] });
-
-  document.getElementById("signin").addEventListener("click", function(){
+   document.getElementById("login-form").addEventListener("submit", function(e){
+    e.preventDefault();
     document.getElementById("gate-error").textContent = "";
-    signInWithPopup(auth, provider).catch(function(err){
+    var email = document.getElementById("login-email").value;
+    var pass = document.getElementById("login-password").value;
+    signInWithEmailAndPassword(auth, email, pass).catch(function(err){
       document.getElementById("gate-error").textContent = "No se pudo iniciar sesión: " + err.message;
     });
   });
