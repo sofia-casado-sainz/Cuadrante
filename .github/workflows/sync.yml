@@ -16,11 +16,12 @@ jobs:
           python-version: "3.12"
 
       - name: Instalar dependencias
-        run: pip install requests firebase-admin
+        run: pip install "setuptools<69" requests firebase-admin pywebpush
 
       - name: Sincronizar
         env:
           CANVAS_DOMAIN: ${{ secrets.CANVAS_DOMAIN }}
           CANVAS_TOKEN: ${{ secrets.CANVAS_TOKEN }}
           FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
         run: python sync_canvas.py

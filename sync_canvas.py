@@ -15,10 +15,12 @@ import json
 import html
 import sys
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
+from pywebpush import webpush, WebPushException
 
 # Tus 9 asignaturas: course_id de Canvas -> nombre bonito.
 # Si cambias de cuatrimestre, actualiza este diccionario con los IDs nuevos
@@ -41,6 +43,12 @@ TOKEN = os.environ["CANVAS_TOKEN"]
 BASE = f"https://{DOMAIN}/api/v1"
 SESSION = requests.Session()
 SESSION.headers.update({"Authorization": f"Bearer {TOKEN}"})
+
+# Avisos push (opcional: si no rellenas VAPID_PRIVATE_KEY como secreto de GitHub, esto no hace nada)
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
+VAPID_CLAIMS_SUB = "mailto:9206029@alumnos.ufv.es"
+# RELLENA con la URL real de tu GitHub Pages (Paso 5 del README), p.ej. "https://tu-usuario.github.io/cuadrante/"
+APP_URL = "https://TU-USUARIO.github.io/cuadrante/"
 
 
 def get_all_pages(url, params=None):
@@ -118,6 +126,7 @@ def sync_tasks(db):
     batch = ChunkedBatch(db)
     count = 0
     new_count = 0
+    new_tasks = []
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for it in items:
@@ -152,6 +161,7 @@ def sync_tasks(db):
             batch.update(ref, update)
         else:
             new_count += 1
+            new_tasks.append({"title": title, "course": COURSE_MAP[course_key]})
             batch.set(ref, {
                 "title": title,
                 "course": COURSE_MAP[course_key],
@@ -167,10 +177,74 @@ def sync_tasks(db):
         "tasks_last_sync": now_iso,
         "tasks_found": count,
     }, merge=True)
-    batch.commit()
+        batch.commit()
     print(f"Tareas: {count} procesadas, {new_count} nuevas.")
+    return new_tasks
 
 # (fin sync_tasks)
+
+
+def send_push_to_all(db, title, body, url):
+    """Manda un aviso push a todos los dispositivos suscritos (guardados por la app)."""
+    if not VAPID_PRIVATE_KEY:
+        return
+    subs = list(db.collection("pushSubscriptions").stream())
+    if not subs:
+        return
+    payload = json.dumps({"title": title, "body": body, "url": url})
+    for sdoc in subs:
+        s = sdoc.to_dict() or {}
+        sub_info = {"endpoint": s.get("endpoint"), "keys": s.get("keys", {})}
+        try:
+            webpush(
+                subscription_info=sub_info,
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_CLAIMS_SUB},
+            )
+        except WebPushException as e:
+            status = getattr(e.response, "status_code", None)
+            if status in (404, 410):
+                # la suscripción ya no existe (desinstalada, permiso revocado...) - la limpiamos
+                sdoc.reference.delete()
+            else:
+                print(f"Aviso: no se pudo mandar push a {sdoc.id}: {e}", file=sys.stderr)
+
+
+def maybe_notify_due_today(db):
+    """Una vez al día (a partir de las 8:00 hora de Madrid), avisa de las tareas que vencen hoy."""
+    madrid_now = datetime.now(ZoneInfo("Europe/Madrid"))
+    if madrid_now.hour < 8:
+        return
+    today_str = madrid_now.date().isoformat()
+
+    meta_ref = db.collection("meta").document("sync")
+    meta = meta_ref.get().to_dict() or {}
+    if meta.get("due_today_notified_date") == today_str:
+        return
+
+    due_today = []
+    for d in db.collection("tasks").stream():
+        t = d.to_dict() or {}
+        if t.get("done"):
+            continue
+        due_at = t.get("due_at")
+        if not due_at:
+            continue
+        try:
+            due_local = datetime.fromisoformat(due_at.replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Madrid"))
+        except Exception:
+            continue
+        if due_local.date().isoformat() == today_str:
+            due_today.append(t.get("title", "(sin título)"))
+
+    meta_ref.set({"due_today_notified_date": today_str}, merge=True)
+
+    if due_today:
+        body = ", ".join(due_today[:5])
+        if len(due_today) > 5:
+            body += f" y {len(due_today) - 5} más"
+        send_push_to_all(db, "📅 Entregas de hoy", body, APP_URL)
 
 
 def sync_avisos(db):
@@ -228,8 +302,16 @@ def main():
     firebase_admin.initialize_app(cred)
     db = firestore.client()
 
-    sync_tasks(db)
+    new_tasks = sync_tasks(db)
     sync_avisos(db)
+
+    if new_tasks:
+        body = ", ".join(t["title"] for t in new_tasks[:5])
+        if len(new_tasks) > 5:
+            body += f" y {len(new_tasks) - 5} más"
+        send_push_to_all(db, f"📚 {len(new_tasks)} tarea(s) nueva(s)", body, APP_URL)
+
+    maybe_notify_due_today(db)
 
 
 if __name__ == "__main__":

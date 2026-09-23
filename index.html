@@ -200,7 +200,10 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Tareas</h2>
-        <label class="checkline"><input type="checkbox" id="hide-done"> Ocultar hechas</label>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label class="checkline"><input type="checkbox" id="hide-done"> Ocultar hechas</label>
+          <button class="btn small" id="enable-push" type="button">🔔 Activar avisos</button>
+        </div>
       </div>
       <div class="muted sync-note" id="tasks-sync-note">Sincronizando…</div>
       <div id="tasks-list"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:50%"></div></div>
@@ -320,6 +323,8 @@ const firebaseConfig = {
 };
 // Solo esta cuenta puede iniciar sesión (se comprueba también en las reglas de Firestore):
 const ALLOWED_EMAIL = "9206029@alumnos.ufv.es";
+// Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
+const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
 
 const app = initializeApp(firebaseConfig);
@@ -725,10 +730,62 @@ const db = getFirestore(app);
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+        addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
       .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; document.getElementById("sched-color").value="#24566A"; })
       .catch(showError);
   });
+
+  // ---------- Avisos push (iPhone añadido a pantalla de inicio) ----------
+  function urlBase64ToUint8Array(base64String){
+    var padding = "=".repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g,"+").replace(/_/g,"/");
+    var raw = atob(base64), out = new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function subIdFor(endpoint){
+    var h = 0; for(var i=0;i<endpoint.length;i++){ h = (h*31 + endpoint.charCodeAt(i)) >>> 0; }
+    return "d" + h;
+  }
+  function refreshPushButton(){
+    var btn = document.getElementById("enable-push");
+    if(!("serviceWorker" in navigator) || !("PushManager" in window)){ btn.style.display = "none"; return; }
+    if(Notification.permission !== "granted") return;
+    navigator.serviceWorker.getRegistration().then(function(reg){
+      return reg && reg.pushManager.getSubscription();
+    }).then(function(sub){
+      if(sub){ btn.textContent = "🔔 Avisos activados"; btn.disabled = true; }
+    }).catch(function(){});
+  }
+  function enablePush(){
+    if(!("serviceWorker" in navigator) || !("PushManager" in window)){
+      showError({message:"Este navegador no admite avisos push."});
+      return;
+    }
+    if(window.navigator.standalone === false){
+      showError({message:"Abre la app desde el icono de la pantalla de inicio (no desde Safari) para poder activar los avisos."});
+      return;
+    }
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      return Notification.requestPermission().then(function(perm){
+        if(perm !== "granted"){ showError({message:"No diste permiso para los avisos."}); return; }
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        }).then(function(sub){
+          var raw = sub.toJSON();
+          setDoc(doc(db,"pushSubscriptions", subIdFor(raw.endpoint)), {
+            endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
+          }).then(function(){
+            var btn = document.getElementById("enable-push");
+            btn.textContent = "🔔 Avisos activados"; btn.disabled = true;
+          }).catch(showError);
+        });
+      });
+    }).catch(function(err){ showError({message:"No se pudo activar: " + err.message}); });
+  }
+  document.getElementById("enable-push").addEventListener("click", enablePush);
+  refreshPushButton();
 
 })();
 </script>
