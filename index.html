@@ -412,6 +412,7 @@ const db = getFirestore(app);
   function activateTab(name){
     tabs.forEach(function(b){ b.classList.toggle("active", b.dataset.tab===name); });
     views.forEach(function(v){ v.classList.toggle("active", v.id==="view-"+name); });
+    window.scrollTo(0, 0);
   }
   tabs.forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -419,6 +420,9 @@ const db = getFirestore(app);
       try{ localStorage.setItem("cuadrante_last_tab", btn.dataset.tab); }catch(e){}
     });
   });
+
+  // Empieza siempre arriba del todo, para que el aviso no se quede tapado debajo del menú
+  window.scrollTo(0, 0);
 
   // ---------- Preferencias que se recuerdan solas (no hace falta repetirlas cada vez) ----------
   try{
