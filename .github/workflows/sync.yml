@@ -2,7 +2,8 @@ name: Sincronizar Canvas
 
 on:
   schedule:
-    - cron: "17 */4 * * *"
+    # Cada hora. La hora es UTC (España va 1-2h por delante según la época del año).
+    - cron: "17 * * * *"
   workflow_dispatch: {}
 
 jobs:

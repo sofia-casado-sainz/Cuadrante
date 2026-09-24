@@ -263,6 +263,7 @@ def sync_avisos(db, course_map):
     batch = ChunkedBatch(db)
     count = 0
     new_count = 0
+    new_avisos = []
     now_iso = datetime.now(timezone.utc).isoformat()
 
     for it in items:
@@ -285,6 +286,7 @@ def sync_avisos(db, course_map):
             batch.update(ref, data)
         else:
             new_count += 1
+            new_avisos.append({"title": data["title"], "course": course})
             data["leido"] = False
             data["updated_at"] = now_iso
             batch.set(ref, data)
@@ -295,6 +297,7 @@ def sync_avisos(db, course_map):
     }, merge=True)
     batch.commit()
     print(f"Avisos: {count} procesados, {new_count} nuevos.")
+    return new_avisos
 
 
 def main():
@@ -305,13 +308,19 @@ def main():
 
     course_map = get_favorite_courses()
     new_tasks = sync_tasks(db, course_map)
-    sync_avisos(db, course_map)
+    new_avisos = sync_avisos(db, course_map)
 
     if new_tasks:
         body = ", ".join(t["title"] for t in new_tasks[:5])
         if len(new_tasks) > 5:
             body += f" y {len(new_tasks) - 5} más"
         send_push_to_all(db, f"📚 {len(new_tasks)} tarea(s) nueva(s)", body, APP_URL)
+
+    if new_avisos:
+        body = ", ".join(a["title"] for a in new_avisos[:5])
+        if len(new_avisos) > 5:
+            body += f" y {len(new_avisos) - 5} más"
+        send_push_to_all(db, f"📣 {len(new_avisos)} aviso(s) nuevo(s)", body, APP_URL)
 
     maybe_notify_due_today(db)
 
