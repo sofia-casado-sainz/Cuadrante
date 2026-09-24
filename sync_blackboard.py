@@ -5,19 +5,17 @@ Es el robot "hermano" de sync_canvas.py: mismo Firestore, misma app, pero escrib
 en el espacio de datos de OTRA persona (la de la UAH), así que cada una ve solo lo suyo.
 
 Cómo asocia cada evento con su asignatura (Blackboard no da esto por API como Canvas):
-  1. TITLE_MAP: título exacto del evento -> asignatura. Se ha construido a mano
-     mirando la página "Actividad" de Blackboard, que sí muestra la asignatura de
-     cada entrega (el feed del calendario no la trae para casi ningún evento).
+  1. TITLE_MAP: título exacto del evento -> asignatura. Construido a mano mirando la
+     página "Actividad" de Blackboard, que sí muestra la asignatura de cada entrega
+     (el feed del calendario no la trae para casi ningún evento).
   2. COURSE_MAP: si el título no está en TITLE_MAP, busca alguno de los códigos de
-     curso (p.ej. "APY6L26") en los campos del evento - esto solo funciona para los
-     eventos "de cabecera" del curso, que sí llevan el código.
-  3. Si ninguna de las dos encuentra nada, se avisa en el log con
-     "(sin asignatura reconocida)" y se guarda igualmente, sin asignatura, usando el
-     método antiguo de separar por ":" o "-" como último recurso.
+     curso (p.ej. "APY6L26") en los campos del evento - solo funciona para los eventos
+     "de cabecera" del curso, que sí llevan el código.
+  3. Si ninguna de las dos encuentra nada, se guarda igualmente como
+     "Pendiente de asignación" y se avisa en el log para poder añadirlo más tarde.
 
 Variables de entorno necesarias:
   BLACKBOARD_ICS_URL   la URL secreta de "suscribirse" del calendario de Blackboard
-                        (empieza por https://xxx.blackboard.com/webapps/calendar/calendarFeed/...)
   FIREBASE_CREDENTIALS el JSON completo de la cuenta de servicio de Firebase (como texto)
   VAPID_PRIVATE_KEY    opcional, para avisos push
   DEBUG_EVENTS          opcional, número de eventos de los que volcar TODOS los campos
@@ -50,6 +48,8 @@ MADRID = ZoneInfo("Europe/Madrid")
 
 DEBUG_EVENTS = int(os.environ.get("DEBUG_EVENTS", "0") or "0")
 
+SIN_ASIGNAR = "Pendiente de asignación"
+
 # Códigos de curso de Blackboard -> nombre bonito. Solo sirve para los eventos "de
 # cabecera" que sí llevan el código en algún campo. Hay que revisarlo cada cuatrimestre.
 COURSE_MAP = {
@@ -60,11 +60,12 @@ COURSE_MAP = {
     "YC66326": "Sistemas electrónicos para comunicaciones",
     "64H5426": "Tecnologías de alta frecuencia",
     "2Y55126": "TFG. Actividades transversales. Ingeniería",
+    "V7O3O26": "Prácticas Externas/Empresa EPS",
 }
 
 # Título exacto del evento (en minúsculas) -> asignatura. Construido a mano a partir
 # de la página "Actividad" de Blackboard. Si un título nuevo no aparece aquí, cae en
-# COURSE_MAP o se queda sin asignatura (y se avisa en el log para poder añadirlo).
+# COURSE_MAP o se queda como "Pendiente de asignación" (y se avisa en el log).
 TITLE_MAP = {
     # Sistemas electrónicos digitales avanzados (L731026)
     "pei1-serie": "Sistemas electrónicos digitales avanzados",
@@ -78,7 +79,7 @@ TITLE_MAP = {
     "calificación de laboratorio": "Sistemas electrónicos digitales avanzados",
     "pei2-rtos": "Sistemas electrónicos digitales avanzados",
     "actividad voluntaria de máquinas de estado": "Sistemas electrónicos digitales avanzados",
-    "tp - múltiplex": "Sistemas electrónicos digitales avanzados",  # sin confirmar del todo
+    "tp - múltiplex": "Sistemas electrónicos digitales avanzados",
 
     # Sistemas electrónicos para comunicaciones (YC66326)
     "p4": "Sistemas electrónicos para comunicaciones",
@@ -106,7 +107,6 @@ TITLE_MAP = {
 
 
 def user_ref(db):
-    """Documento raíz del dueño de este script dentro de Firestore (users/{email})."""
     return db.collection("users").document(OWNER_EMAIL)
 
 
@@ -117,8 +117,6 @@ def clean_title(title):
 
 
 class ChunkedBatch:
-    """Igual que en sync_canvas.py: auto-commitea cada N escrituras (límite de Firestore: 500)."""
-
     def __init__(self, db, chunk_size=400):
         self.db = db
         self.chunk_size = chunk_size
@@ -147,37 +145,21 @@ class ChunkedBatch:
 
 
 def fetch_ics():
-    """Descarga el feed .ics. La URL es secreta (funciona como una contraseña), así que
-    nunca se imprime ni se guarda en ningún sitio."""
     resp = requests.get(BLACKBOARD_ICS_URL, timeout=30)
     resp.raise_for_status()
     return resp.content
 
 
 def match_course(component, cleaned_title):
-    # 1) título exacto conocido (viene de la página de Actividad de Blackboard)
     course = TITLE_MAP.get(cleaned_title.strip().lower())
     if course:
         return course
-    # 2) código de asignatura en alguno de los campos (eventos "de cabecera")
     fields = ("SUMMARY", "DESCRIPTION", "CATEGORIES", "LOCATION", "UID")
     haystack = " ".join(str(component.get(f) or "") for f in fields)
     for code, name in COURSE_MAP.items():
         if code in haystack:
             return name
     return ""
-
-
-def split_course_title(summary):
-    """Último recurso si no se reconoce nada: separa por ':' o '-' como antes."""
-    summary = clean_title(summary)
-    for sep in (":", " - ", "–"):
-        if sep in summary:
-            course, _, title = summary.partition(sep)
-            course, title = course.strip(), title.strip()
-            if course and title:
-                return course, title
-    return "", summary
 
 
 def event_datetime(value):
@@ -225,13 +207,12 @@ def sync_blackboard_calendar(db):
         raw_summary = str(component.get("SUMMARY") or "(sin título)")
         cleaned_title = clean_title(raw_summary)
         course = match_course(component, cleaned_title)
-        if course:
-            title = cleaned_title
-            if title.strip().lower() == course.strip().lower():
-                title = course
-        else:
-            course, title = split_course_title(raw_summary)
+        title = cleaned_title
+        if not course:
+            course = SIN_ASIGNAR
             print(f"(sin asignatura reconocida) {raw_summary!r}", file=sys.stderr)
+        elif title.strip().lower() == course.strip().lower():
+            title = course
 
         dtstart = component.get("DTSTART")
         due_dt = event_datetime(dtstart.dt) if dtstart else None
