@@ -48,8 +48,17 @@ SESSION.headers.update({"Authorization": f"Bearer {TOKEN}"})
 # Avisos push (opcional: si no rellenas VAPID_PRIVATE_KEY como secreto de GitHub, esto no hace nada)
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_CLAIMS_SUB = "mailto:9206029@alumnos.ufv.es"
-# RELLENA con la URL real de tu GitHub Pages (Paso 5 del README), p.ej. "https://tu-usuario.github.io/cuadrante/"
 APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
+
+# La app ahora admite más de una persona (cada una con su propio login). Cada robot de
+# sincronización escribe solo dentro del espacio de datos de SU dueño, en
+# users/{OWNER_EMAIL}/... de Firestore. Este script es el de Canvas/UFV, así que usa tu email:
+OWNER_EMAIL = "9206029@alumnos.ufv.es"
+
+
+def user_ref(db):
+    """Documento raíz del dueño de este script dentro de Firestore (users/{email})."""
+    return db.collection("users").document(OWNER_EMAIL)
 
 
 def get_all_pages(url, params=None):
@@ -122,7 +131,8 @@ def sync_tasks(db, course_map):
         params={"per_page": 100, "start_date": start, "end_date": end},
     )
 
-    existing = {d.id: d.to_dict() for d in db.collection("tasks").stream()}
+    tasks_coll = user_ref(db).collection("tasks")
+    existing = {d.id: d.to_dict() for d in tasks_coll.stream()}
 
     batch = ChunkedBatch(db)
     count = 0
@@ -146,7 +156,7 @@ def sync_tasks(db, course_map):
         url = it.get("html_url", "")
         submitted = bool((it.get("submissions") or {}).get("submitted"))
 
-        ref = db.collection("tasks").document(doc_id)
+        ref = tasks_coll.document(doc_id)
         count += 1
 
         if doc_id in existing:
@@ -174,7 +184,7 @@ def sync_tasks(db, course_map):
                 "updated_at": now_iso,
             })
 
-    batch.set(db.collection("meta").document("sync"), {
+    batch.set(user_ref(db).collection("meta").document("sync"), {
         "tasks_last_sync": now_iso,
         "tasks_found": count,
     }, merge=True)
@@ -182,14 +192,12 @@ def sync_tasks(db, course_map):
     print(f"Tareas: {count} procesadas, {new_count} nuevas.")
     return new_tasks
 
-# (fin sync_tasks)
-
 
 def send_push_to_all(db, title, body, url):
-    """Manda un aviso push a todos los dispositivos suscritos (guardados por la app)."""
+    """Manda un aviso push a todos los dispositivos suscritos por el dueño de este script."""
     if not VAPID_PRIVATE_KEY:
         return
-    subs = list(db.collection("pushSubscriptions").stream())
+    subs = list(user_ref(db).collection("pushSubscriptions").stream())
     if not subs:
         return
     payload = json.dumps({"title": title, "body": body, "url": url})
@@ -206,7 +214,6 @@ def send_push_to_all(db, title, body, url):
         except WebPushException as e:
             status = getattr(e.response, "status_code", None)
             if status in (404, 410):
-                # la suscripción ya no existe (desinstalada, permiso revocado...) - la limpiamos
                 sdoc.reference.delete()
             else:
                 print(f"Aviso: no se pudo mandar push a {sdoc.id}: {e}", file=sys.stderr)
@@ -219,13 +226,13 @@ def maybe_notify_due_today(db):
         return
     today_str = madrid_now.date().isoformat()
 
-    meta_ref = db.collection("meta").document("sync")
+    meta_ref = user_ref(db).collection("meta").document("sync")
     meta = meta_ref.get().to_dict() or {}
     if meta.get("due_today_notified_date") == today_str:
         return
 
     due_today = []
-    for d in db.collection("tasks").stream():
+    for d in user_ref(db).collection("tasks").stream():
         t = d.to_dict() or {}
         if t.get("done"):
             continue
@@ -258,7 +265,8 @@ def sync_avisos(db, course_map):
 
     items = get_all_pages(f"{BASE}/announcements", params=params)
 
-    existing_ids = {d.id for d in db.collection("avisos").stream()}
+    avisos_coll = user_ref(db).collection("avisos")
+    existing_ids = {d.id for d in avisos_coll.stream()}
 
     batch = ChunkedBatch(db)
     count = 0
@@ -272,7 +280,7 @@ def sync_avisos(db, course_map):
         course_key = it.get("context_code", "")
         course = course_map.get(course_key, "")
 
-        ref = db.collection("avisos").document(doc_id)
+        ref = avisos_coll.document(doc_id)
         count += 1
         data = {
             "title": it.get("title", "(sin título)"),
@@ -291,7 +299,7 @@ def sync_avisos(db, course_map):
             data["updated_at"] = now_iso
             batch.set(ref, data)
 
-    batch.set(db.collection("meta").document("sync"), {
+    batch.set(user_ref(db).collection("meta").document("sync"), {
         "avisos_last_sync": now_iso,
         "avisos_found": count,
     }, merge=True)
