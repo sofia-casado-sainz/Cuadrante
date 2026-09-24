@@ -428,19 +428,18 @@ const db = getFirestore(app);
     });
   });
 
-  // ---------- Cambiar de pestaña deslizando el dedo ----------
+  // ---------- Cambiar de pestaña deslizando el dedo (desde cualquier parte) ----------
   (function(){
     var startX = 0, startY = 0, startTime = 0;
-    var mainEl = document.querySelector("main");
-    mainEl.addEventListener("touchstart", function(e){
+    document.addEventListener("touchstart", function(e){
       if(e.touches.length !== 1) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
       startTime = Date.now();
     }, { passive: true });
-    mainEl.addEventListener("touchend", function(e){
+    document.addEventListener("touchend", function(e){
       if(e.changedTouches.length !== 1) return;
-      if(e.target.closest(".horario-wrap")) return;
+      if(e.target.closest(".horario-wrap") || e.target.closest("nav.tabs")) return;
       var dx = e.changedTouches[0].clientX - startX;
       var dy = e.changedTouches[0].clientY - startY;
       if(Date.now() - startTime > 600) return;
