@@ -30,15 +30,29 @@ BLACKBOARD_ICS_URL = os.environ["BLACKBOARD_ICS_URL"]
 # El email con el que esta persona inicia sesión en la app (el que le creaste en
 # Firebase Authentication). Este robot escribe SOLO en users/{OWNER_EMAIL}/... — la otra
 # persona (UFV) nunca ve estos datos y esta persona nunca ve los de Canvas.
-# RELLENA con el email real de la persona de la UAH:
 OWNER_EMAIL = "ana.ecenarro@edu.uah.es"
 
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_CLAIMS_SUB = f"mailto:{OWNER_EMAIL}"
-# RELLENA con la URL real de tu GitHub Pages (la misma app, Paso 5 del README)
 APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
 
 MADRID = ZoneInfo("Europe/Madrid")
+
+# ---------------------------------------------------------------------------
+# Blackboard no deja consultar "qué asignaturas tienes en favoritos" por API,
+# así que a diferencia de Canvas esta lista NO se actualiza sola. Si cambias
+# de cuatrimestre o de favoritos, actualiza aquí el código (lo que sale debajo
+# de la imagen de cada curso, tipo "APY6L26") y el nombre bonito para mostrar.
+# ---------------------------------------------------------------------------
+COURSE_MAP = {
+    "APY6L26": "Conmutación",
+    "8WQD726": "Electrónica de potencia",
+    "3L4M626": "Instrumentación electrónica",
+    "L731026": "Sistemas electrónicos digitales avanzados",
+    "YC66326": "Sistemas electrónicos para comunicaciones",
+    "64H5426": "Tecnologías de alta frecuencia",
+    "2Y55126": "TFG. Actividades transversales. Ingeniería",
+}
 
 
 def user_ref(db):
@@ -47,7 +61,34 @@ def user_ref(db):
 
 
 def clean_title(title):
-    return re.sub(r"\s*\[[^\]]*\]\s*$", "", title or "").strip()
+    title = re.sub(r"\s*\[[^\]]*\]\s*$", "", title or "").strip()
+    # quita el prefijo de curso académico tipo "2026-27: " si lo lleva
+    title = re.sub(r"^\d{4}-\d{2}:\s*", "", title).strip()
+    return title
+
+
+def match_course(component):
+    """Busca el código de la asignatura (p.ej. APY6L26) en los campos del evento
+    para saber de qué asignatura es, en vez de adivinarlo por el texto."""
+    fields = ("SUMMARY", "DESCRIPTION", "CATEGORIES", "LOCATION", "UID")
+    haystack = " ".join(str(component.get(f) or "") for f in fields)
+    for code, name in COURSE_MAP.items():
+        if code in haystack:
+            return name
+    return ""
+
+
+def split_course_title(summary):
+    """Respaldo para eventos donde no se reconoce el código: intenta separar
+    'Asignatura: Título' por los separadores típicos."""
+    summary = clean_title(summary)
+    for sep in (":", " - ", "–"):
+        if sep in summary:
+            course, _, title = summary.partition(sep)
+            course, title = course.strip(), title.strip()
+            if course and title:
+                return course, title
+    return "", summary
 
 
 class ChunkedBatch:
@@ -88,20 +129,6 @@ def fetch_ics():
     return resp.content
 
 
-def split_course_title(summary):
-    """Blackboard suele poner el nombre de la asignatura y el título del evento juntos,
-    normalmente separados por ':' o '-'. Si no hay separador, todo va como título y la
-    asignatura se deja vacía (se puede rellenar a mano desde la propia app)."""
-    summary = clean_title(summary)
-    for sep in (":", " - ", "–"):
-        if sep in summary:
-            course, _, title = summary.partition(sep)
-            course, title = course.strip(), title.strip()
-            if course and title:
-                return course, title
-    return "", summary
-
-
 def event_datetime(value):
     """Un VEVENT de icalendar puede traer un 'date' (evento de todo el día) o un
     'datetime' con hora. Normaliza ambos a un datetime con zona horaria de Madrid."""
@@ -133,8 +160,15 @@ def sync_blackboard_calendar(db):
             continue
         doc_id = "bb-" + hashlib.md5(uid.encode("utf-8")).hexdigest()[:16]
 
-        summary = str(component.get("SUMMARY") or "(sin título)")
-        course, title = split_course_title(summary)
+        raw_summary = str(component.get("SUMMARY") or "(sin título)")
+        course = match_course(component)
+        if course:
+            title = clean_title(raw_summary)
+            if title.strip().lower() == course.strip().lower():
+                title = course
+        else:
+            course, title = split_course_title(raw_summary)
+            print(f"(sin asignatura reconocida) {raw_summary!r}", file=sys.stderr)
 
         dtstart = component.get("DTSTART")
         due_dt = event_datetime(dtstart.dt) if dtstart else None
