@@ -421,19 +421,34 @@ const db = getFirestore(app);
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
 
 var currentUserEmail = null;
+var isUAH = false;
 function uDoc(){ return doc.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
 function uColl(){ return collection.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
 
 onAuthStateChanged(auth, function(user){
     if(user){
       currentUserEmail = user.email;
+      isUAH = user.email.indexOf("uah.es") !== -1;
       document.getElementById("gate").style.display = "none";
       document.getElementById("app").style.display = "block";
       var sub = document.getElementById("brand-sub");
       if(sub){
-        var uni = user.email.indexOf("uah.es") !== -1 ? "UAH" : "UFV";
+        var uni = isUAH ? "UAH" : "UFV";
         sub.textContent = uni + " · curso 26/27";
       }
+      var avisosTabBtn = document.querySelector('nav.tabs button[data-tab="avisos"]');
+      if(avisosTabBtn){
+        avisosTabBtn.hidden = isUAH;
+        if(isUAH && avisosTabBtn.classList.contains("active")){
+          activateTab("tareas");
+          try{ localStorage.setItem("cuadrante_last_tab", "tareas"); }catch(e){}
+        }
+      }
+      try{
+        if(isUAH && localStorage.getItem("cuadrante_last_tab") === "avisos"){
+          localStorage.setItem("cuadrante_last_tab", "tareas");
+        }
+      }catch(e){}
       startApp();
     } else {
       currentUserEmail = null;
@@ -473,7 +488,7 @@ onAuthStateChanged(auth, function(user){
       var dy = e.changedTouches[0].clientY - startY;
       if(Date.now() - startTime > 600) return;
       if(Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-      var names = Array.prototype.map.call(tabs, function(b){ return b.dataset.tab; });
+      var names = Array.prototype.filter.call(tabs, function(b){ return !b.hidden; }).map(function(b){ return b.dataset.tab; });
       var activeBtn = document.querySelector("nav.tabs button.active");
       var idx = names.indexOf(activeBtn ? activeBtn.dataset.tab : names[0]);
       var next = dx < 0 ? idx + 1 : idx - 1;
@@ -519,7 +534,8 @@ onAuthStateChanged(auth, function(user){
 
   function startApp(){
     if(started) return; started = true;
-    subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors();
+    subscribeMeta(); subscribeTasks(); subscribeSchedule(); subscribeColors();
+    if(!isUAH){ subscribeAvisos(); }
     renderCalendar();
   }
 
