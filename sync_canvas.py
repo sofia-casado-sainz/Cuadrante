@@ -177,7 +177,7 @@ def sync_tasks(db):
         "tasks_last_sync": now_iso,
         "tasks_found": count,
     }, merge=True)
-        batch.commit()
+    batch.commit()
     print(f"Tareas: {count} procesadas, {new_count} nuevas.")
     return new_tasks
 

@@ -263,8 +263,8 @@
             <select id="edit-sched-subject"></select>
             <input type="text" id="edit-sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
-          <div><label>Aula (opcional)</label><input type="text" id="edit-sched-room" placeholder="Ej. A-204"></div>
+          <div><label>Día (puedes tocar varios)</label><select id="sched-day" multiple size="4"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="edit-sched-start"></div>
           <div><label>Hora fin</label><input type="time" id="edit-sched-end"></div>
           <div><label>Color</label><input type="color" id="edit-sched-color"></div>
@@ -427,6 +427,33 @@ const db = getFirestore(app);
       try{ localStorage.setItem("cuadrante_last_tab", btn.dataset.tab); }catch(e){}
     });
   });
+
+  // ---------- Cambiar de pestaña deslizando el dedo ----------
+  (function(){
+    var startX = 0, startY = 0, startTime = 0;
+    var mainEl = document.querySelector("main");
+    mainEl.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startTime = Date.now();
+    }, { passive: true });
+    mainEl.addEventListener("touchend", function(e){
+      if(e.changedTouches.length !== 1) return;
+      if(e.target.closest(".horario-wrap")) return;
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+      if(Date.now() - startTime > 600) return;
+      if(Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+      var names = Array.prototype.map.call(tabs, function(b){ return b.dataset.tab; });
+      var activeBtn = document.querySelector("nav.tabs button.active");
+      var idx = names.indexOf(activeBtn ? activeBtn.dataset.tab : names[0]);
+      var next = dx < 0 ? idx + 1 : idx - 1;
+      if(next < 0 || next >= names.length) return;
+      activateTab(names[next]);
+      try{ localStorage.setItem("cuadrante_last_tab", names[next]); }catch(e){}
+    }, { passive: true });
+  })();
 
   // Empieza siempre arriba del todo, para que el aviso no se quede tapado debajo del menú
   window.scrollTo(0, 0);
@@ -802,8 +829,8 @@ const db = getFirestore(app);
       subject = document.getElementById("sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var dayChecks = document.querySelectorAll(".sched-day-check:checked");
-    var days = Array.prototype.map.call(dayChecks, function(c){ return c.value; });
+    var daySel = document.getElementById("sched-day");
+    var days = Array.prototype.map.call(daySel.selectedOptions, function(o){ return o.value; });
     if(!days.length){ showError({message:"Elige al menos un día."}); return; }
     var room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
@@ -836,10 +863,26 @@ const db = getFirestore(app);
     var btn = document.getElementById("enable-push");
     if(!("serviceWorker" in navigator) || !("PushManager" in window)){ btn.style.display = "none"; return; }
     if(Notification.permission !== "granted") return;
-    navigator.serviceWorker.ready.then(function(reg){
-      return reg.pushManager.getSubscription();
+    navigator.serviceWorker.register("sw.js").then(function(){
+      return navigator.serviceWorker.ready;
+    }).then(function(reg){
+      return reg.pushManager.getSubscription().then(function(sub){
+        if(sub) return sub;
+        // El permiso ya estaba concedido pero la suscripción se perdió (pasa a veces
+        // en iPhone si llevas unos días sin abrir la app) - la rehacemos sin preguntar nada.
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+      });
     }).then(function(sub){
-      if(sub){ btn.textContent = "🔔 Avisos activados"; btn.disabled = true; }
+      if(!sub) return;
+      var raw = sub.toJSON();
+      return setDoc(doc(db,"pushSubscriptions", subIdFor(raw.endpoint)), {
+        endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
+      });
+    }).then(function(){
+      btn.textContent = "🔔 Avisos activados"; btn.disabled = true;
     }).catch(function(){});
   }
   function enablePush(){
@@ -871,6 +914,23 @@ const db = getFirestore(app);
   }
   document.getElementById("enable-push").addEventListener("click", enablePush);
   refreshPushButton();
+
+  // ---------- Actualizarse sola cuando hay una versión nueva publicada ----------
+  function checkForUpdate(){
+    fetch(location.href, { method:"HEAD", cache:"no-store" }).then(function(res){
+      var serverModified = res.headers.get("Last-Modified");
+      if(!serverModified) return;
+      var serverTime = new Date(serverModified).getTime();
+      var currentTime = new Date(document.lastModified).getTime();
+      if(serverTime && currentTime && serverTime > currentTime + 1000){
+        location.reload();
+      }
+    }).catch(function(){});
+  }
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible"){ checkForUpdate(); refreshPushButton(); }
+  });
+  setInterval(checkForUpdate, 10 * 60 * 1000);
 
 })();
 </script>
