@@ -162,7 +162,7 @@ def sync_tasks(db, course_map):
             batch.update(ref, update)
         else:
             new_count += 1
-            new_tasks.append({"title": title, "course": COURSE_MAP[course_key]})
+            new_tasks.append({"title": title, "course": course_map[course_key]})
             batch.set(ref, {
                 "title": title,
                 "course": course_map[course_key],
