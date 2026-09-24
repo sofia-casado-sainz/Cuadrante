@@ -4,6 +4,17 @@ Sincroniza el calendario de Blackboard (UAH) con Firestore.
 Es el robot "hermano" de sync_canvas.py: mismo Firestore, misma app, pero escribe
 en el espacio de datos de OTRA persona (la de la UAH), así que cada una ve solo lo suyo.
 
+Cómo asocia cada evento con su asignatura (Blackboard no da esto por API como Canvas):
+  1. TITLE_MAP: título exacto del evento -> asignatura. Se ha construido a mano
+     mirando la página "Actividad" de Blackboard, que sí muestra la asignatura de
+     cada entrega (el feed del calendario no la trae para casi ningún evento).
+  2. COURSE_MAP: si el título no está en TITLE_MAP, busca alguno de los códigos de
+     curso (p.ej. "APY6L26") en los campos del evento - esto solo funciona para los
+     eventos "de cabecera" del curso, que sí llevan el código.
+  3. Si ninguna de las dos encuentra nada, se avisa en el log con
+     "(sin asignatura reconocida)" y se guarda igualmente, sin asignatura, usando el
+     método antiguo de separar por ":" o "-" como último recurso.
+
 Variables de entorno necesarias:
   BLACKBOARD_ICS_URL   la URL secreta de "suscribirse" del calendario de Blackboard
                         (empieza por https://xxx.blackboard.com/webapps/calendar/calendarFeed/...)
@@ -29,9 +40,6 @@ from icalendar import Calendar
 
 BLACKBOARD_ICS_URL = os.environ["BLACKBOARD_ICS_URL"]
 
-# El email con el que esta persona inicia sesión en la app (el que le creaste en
-# Firebase Authentication). Este robot escribe SOLO en users/{OWNER_EMAIL}/... — la otra
-# persona (UFV) nunca ve estos datos y esta persona nunca ve los de Canvas.
 OWNER_EMAIL = "ana.ecenarro@edu.uah.es"
 
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
@@ -40,12 +48,10 @@ APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
 
 MADRID = ZoneInfo("Europe/Madrid")
 
-# Cuántos eventos volcar enteros en el log (solo para depurar; 0 = desactivado).
 DEBUG_EVENTS = int(os.environ.get("DEBUG_EVENTS", "0") or "0")
 
-# Códigos de curso de Blackboard -> nombre bonito para mostrar en la app.
-# Hay que actualizar esto a mano cada cuatrimestre (Blackboard no tiene un
-# equivalente a los "favoritos" de Canvas a los que se pueda preguntar por API).
+# Códigos de curso de Blackboard -> nombre bonito. Solo sirve para los eventos "de
+# cabecera" que sí llevan el código en algún campo. Hay que revisarlo cada cuatrimestre.
 COURSE_MAP = {
     "APY6L26": "Conmutación",
     "8WQD726": "Electrónica de potencia",
@@ -54,6 +60,48 @@ COURSE_MAP = {
     "YC66326": "Sistemas electrónicos para comunicaciones",
     "64H5426": "Tecnologías de alta frecuencia",
     "2Y55126": "TFG. Actividades transversales. Ingeniería",
+}
+
+# Título exacto del evento (en minúsculas) -> asignatura. Construido a mano a partir
+# de la página "Actividad" de Blackboard. Si un título nuevo no aparece aquí, cae en
+# COURSE_MAP o se queda sin asignatura (y se avisa en el log para poder añadirlo).
+TITLE_MAP = {
+    # Sistemas electrónicos digitales avanzados (L731026)
+    "pei1-serie": "Sistemas electrónicos digitales avanzados",
+    "pei2-dsp": "Sistemas electrónicos digitales avanzados",
+    "pei1-tempadcdma": "Sistemas electrónicos digitales avanzados",
+    "pei1-ejec": "Sistemas electrónicos digitales avanzados",
+    "pei1-state": "Sistemas electrónicos digitales avanzados",
+    "calificacion de teoría": "Sistemas electrónicos digitales avanzados",
+    "pei2-http": "Sistemas electrónicos digitales avanzados",
+    "pei2-mem": "Sistemas electrónicos digitales avanzados",
+    "calificación de laboratorio": "Sistemas electrónicos digitales avanzados",
+    "pei2-rtos": "Sistemas electrónicos digitales avanzados",
+    "actividad voluntaria de máquinas de estado": "Sistemas electrónicos digitales avanzados",
+    "tp - múltiplex": "Sistemas electrónicos digitales avanzados",  # sin confirmar del todo
+
+    # Sistemas electrónicos para comunicaciones (YC66326)
+    "p4": "Sistemas electrónicos para comunicaciones",
+    "p3": "Sistemas electrónicos para comunicaciones",
+    "práctica 1.2 (entrega opcional) - resonador tdk r820 - respuesta en frecuencia": "Sistemas electrónicos para comunicaciones",
+    "práctica 0 - curso aplac": "Sistemas electrónicos para comunicaciones",
+    "práctica 1 - componentes pasivos en af - comparativas respuesta en frecuencia": "Sistemas electrónicos para comunicaciones",
+    "entrega práctica final: emisora fm - explicación y especificaciones": "Sistemas electrónicos para comunicaciones",
+    "práctica 4.1 - amplificadores en rf - pequeña señal": "Sistemas electrónicos para comunicaciones",
+    "entrega práctica final: emisora fm - convocatoria extraordinaria": "Sistemas electrónicos para comunicaciones",
+    "práctica 2 - simular transmisor fm práctica final en bloques (sistemas)": "Sistemas electrónicos para comunicaciones",
+    "práctica 3 - adaptación de impedancias": "Sistemas electrónicos para comunicaciones",
+    "prácticas 1 y 2": "Sistemas electrónicos para comunicaciones",
+
+    # Tecnologías de alta frecuencia (64H5426)
+    "notas de memoria de práctica 1": "Tecnologías de alta frecuencia",
+    "notas de memoria de práctica 2": "Tecnologías de alta frecuencia",
+    "consulta notas de laboratorio 2025-2026": "Tecnologías de alta frecuencia",
+    "problemas adaptación": "Tecnologías de alta frecuencia",
+    "adaptación de impedancias": "Tecnologías de alta frecuencia",
+
+    # Instrumentación electrónica (3L4M626)
+    "pei 1": "Instrumentación electrónica",
 }
 
 
@@ -106,8 +154,12 @@ def fetch_ics():
     return resp.content
 
 
-def match_course(component):
-    """Busca alguno de los códigos de COURSE_MAP dentro de los campos del evento."""
+def match_course(component, cleaned_title):
+    # 1) título exacto conocido (viene de la página de Actividad de Blackboard)
+    course = TITLE_MAP.get(cleaned_title.strip().lower())
+    if course:
+        return course
+    # 2) código de asignatura en alguno de los campos (eventos "de cabecera")
     fields = ("SUMMARY", "DESCRIPTION", "CATEGORIES", "LOCATION", "UID")
     haystack = " ".join(str(component.get(f) or "") for f in fields)
     for code, name in COURSE_MAP.items():
@@ -117,9 +169,7 @@ def match_course(component):
 
 
 def split_course_title(summary):
-    """Blackboard suele poner el nombre de la asignatura y el título del evento juntos,
-    normalmente separados por ':' o '-'. Si no hay separador, todo va como título y la
-    asignatura se deja vacía (se puede rellenar a mano desde la propia app)."""
+    """Último recurso si no se reconoce nada: separa por ':' o '-' como antes."""
     summary = clean_title(summary)
     for sep in (":", " - ", "–"):
         if sep in summary:
@@ -131,8 +181,6 @@ def split_course_title(summary):
 
 
 def event_datetime(value):
-    """Un VEVENT de icalendar puede traer un 'date' (evento de todo el día) o un
-    'datetime' con hora. Normaliza ambos a un datetime con zona horaria de Madrid."""
     if isinstance(value, datetime):
         if value.tzinfo is None:
             return value.replace(tzinfo=MADRID)
@@ -175,9 +223,10 @@ def sync_blackboard_calendar(db):
         doc_id = "bb-" + hashlib.md5(uid.encode("utf-8")).hexdigest()[:16]
 
         raw_summary = str(component.get("SUMMARY") or "(sin título)")
-        course = match_course(component)
+        cleaned_title = clean_title(raw_summary)
+        course = match_course(component, cleaned_title)
         if course:
-            title = clean_title(raw_summary)
+            title = cleaned_title
             if title.strip().lower() == course.strip().lower():
                 title = course
         else:
@@ -226,7 +275,6 @@ def sync_blackboard_calendar(db):
 
 
 def send_push_to_all(db, title, body, url):
-    """Manda un aviso push a todos los dispositivos suscritos por el dueño de este script."""
     if not VAPID_PRIVATE_KEY:
         return
     subs = list(user_ref(db).collection("pushSubscriptions").stream())
