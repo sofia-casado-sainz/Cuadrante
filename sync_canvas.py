@@ -22,21 +22,22 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from pywebpush import webpush, WebPushException
 
-# Tus 9 asignaturas: course_id de Canvas -> nombre bonito.
-# Si cambias de cuatrimestre, actualiza este diccionario con los IDs nuevos
-# (los sacas de https://<tu-canvas>/api/v1/courses?enrollment_state=active&access_token=TU_TOKEN
-# pegado en la barra del navegador, o preguntándoselo a Claude una vez).
-COURSE_MAP = {
-    "course_74819": "Computación de alto rendimiento",
-    "course_70061": "Aprendizaje estadístico y data mining",
-    "course_70107": "Emprendimiento e innovación",
-    "course_70168": "Internet of Things",
-    "course_70027": "Ingeniería del Software II",
-    "course_70126": "La cuestión de Dios",
-    "course_70212": "Planificación y gestión de proyectos informáticos",
-    "course_73690": "Roboética en el cuidado de la salud",
-    "course_73399": "Seguridad",
-}
+# Ya no hace falta mantener esta lista a mano: cada sincronización pregunta a Canvas
+# qué asignaturas tienes marcadas con la estrella de favorito en el dashboard, y usa
+# esas (todas). Si algún cuatrimestre no tienes ninguna marcada, usa todas las
+# asignaturas activas como respaldo, para no quedarte sin tareas.
+def get_favorite_courses():
+    favs = get_all_pages(f"{BASE}/users/self/favorites/courses", params={"per_page": 100})
+    if not favs:
+        favs = get_all_pages(f"{BASE}/courses", params={"per_page": 100, "enrollment_state": "active"})
+    course_map = {}
+    for c in favs:
+        cid = c.get("id")
+        if not cid:
+            continue
+        name = c.get("name") or c.get("course_code") or f"Curso {cid}"
+        course_map[f"course_{cid}"] = clean_title(name)
+    return course_map
 
 DOMAIN = os.environ["CANVAS_DOMAIN"]
 TOKEN = os.environ["CANVAS_TOKEN"]
@@ -111,7 +112,7 @@ class ChunkedBatch:
             self.pending = 0
 
 
-def sync_tasks(db):
+def sync_tasks(db, course_map):
     today = datetime.now(timezone.utc).date()
     start = (today - timedelta(days=14)).isoformat()
     end = (today + timedelta(days=180)).isoformat()
@@ -134,7 +135,7 @@ def sync_tasks(db):
         if ptype not in ("assignment", "quiz", "discussion_topic"):
             continue
         course_key = f"course_{it.get('course_id')}"
-        if course_key not in COURSE_MAP:
+        if course_key not in course_map:
             continue
 
         plannable = it.get("plannable") or {}
@@ -153,7 +154,7 @@ def sync_tasks(db):
                 "title": title,
                 "due_at": due_at,
                 "url": url,
-                "course": COURSE_MAP[course_key],
+                "course": course_map[course_key],
                 "updated_at": now_iso,
             }
             if submitted:
@@ -164,7 +165,7 @@ def sync_tasks(db):
             new_tasks.append({"title": title, "course": COURSE_MAP[course_key]})
             batch.set(ref, {
                 "title": title,
-                "course": COURSE_MAP[course_key],
+                "course": course_map[course_key],
                 "due_at": due_at,
                 "url": url,
                 "type": ptype,
@@ -247,12 +248,12 @@ def maybe_notify_due_today(db):
         send_push_to_all(db, "📅 Entregas de hoy", body, APP_URL)
 
 
-def sync_avisos(db):
+def sync_avisos(db, course_map):
     today = datetime.now(timezone.utc).date()
     start = (today - timedelta(days=60)).isoformat()
 
     params = [("per_page", 100), ("start_date", start)]
-    for course_key in COURSE_MAP:
+    for course_key in course_map:
         params.append(("context_codes[]", course_key))
 
     items = get_all_pages(f"{BASE}/announcements", params=params)
@@ -268,7 +269,7 @@ def sync_avisos(db):
         aviso_id = it.get("id")
         doc_id = f"a-{aviso_id}"
         course_key = it.get("context_code", "")
-        course = COURSE_MAP.get(course_key, "")
+        course = course_map.get(course_key, "")
 
         ref = db.collection("avisos").document(doc_id)
         count += 1
@@ -302,8 +303,9 @@ def main():
     firebase_admin.initialize_app(cred)
     db = firestore.client()
 
-    new_tasks = sync_tasks(db)
-    sync_avisos(db)
+    course_map = get_favorite_courses()
+    new_tasks = sync_tasks(db, course_map)
+    sync_avisos(db, course_map)
 
     if new_tasks:
         body = ", ".join(t["title"] for t in new_tasks[:5])
