@@ -1,0 +1,23 @@
+name: Sincronizar Blackboard (UAH)
+
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: pip install "setuptools<69" requests firebase-admin pywebpush icalendar
+      - name: Sincronizar
+        env:
+          BLACKBOARD_ICS_URL: ${{ secrets.BLACKBOARD_ICS_URL }}
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: python sync_blackboard.py
