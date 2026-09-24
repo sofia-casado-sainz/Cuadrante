@@ -1,12 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Solo tu cuenta (9206029@alumnos.ufv.es) puede leer y escribir.
-    // El script de GitHub Actions no pasa por aquí: usa una clave de administrador
-    // que se salta estas reglas, así que sigue funcionando igual.
-    match /{document=**} {
+    match /users/{userEmail}/{document=**} {
       allow read, write: if request.auth != null
-        && request.auth.token.email == "9206029@alumnos.ufv.es";
+        && request.auth.token.email == userEmail;
     }
   }
 }

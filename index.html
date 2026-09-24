@@ -179,9 +179,9 @@
 
 <div id="gate">
   <h1>Cuadrante</h1>
-  <p>Tu panel personal de Canvas. Inicia sesión para ver tus tareas y avisos.</p>
+  <p>Tu panel personal de tareas y avisos. Inicia sesión para ver los tuyos.</p>
   <form id="login-form" style="display:flex;flex-direction:column;gap:8px;max-width:280px;margin:0 auto;">
-    <input id="login-email" type="email" value="9206029@alumnos.ufv.es" required>
+    <input id="login-email" type="email" placeholder="tu email" required>
     <input id="login-password" type="password" placeholder="Contraseña" required>
     <button class="btn primary" type="submit">Entrar</button>
   </form>
@@ -191,7 +191,7 @@
 <div id="app">
 <header class="top">
   <div class="brand">
-    <div><h1>Cuadrante</h1><span class="sub mono">UFV · curso 26/27</span></div>
+    <div><h1>Cuadrante</h1><span class="sub mono" id="brand-sub">UFV · curso 26/27</span></div>
     <button id="signout">Cerrar sesión</button>
   </div>
   <nav class="tabs">
@@ -343,8 +343,7 @@ const firebaseConfig = {
   messagingSenderId: "865869614711",
   appId: "1:865869614711:web:9b77b3c66f1078598fc072"
 };
-// Solo esta cuenta puede iniciar sesión (se comprueba también en las reglas de Firestore):
-const ALLOWED_EMAIL = "9206029@alumnos.ufv.es";
+
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -374,7 +373,7 @@ const db = getFirestore(app);
   function saveColor(subject, hex){
     if(!subject) return;
     var patch = {}; patch[subject] = hex;
-    setDoc(doc(db,"settings","colors"), patch, {merge:true}).catch(showError);
+    setDoc(uDoc("settings","colors"), patch, {merge:true}).catch(showError);
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
@@ -398,18 +397,25 @@ const db = getFirestore(app);
   });
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
 
-  onAuthStateChanged(auth, function(user){
-    if(user && user.email === ALLOWED_EMAIL){
+var currentUserEmail = null;
+function uDoc(){ return doc.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
+function uColl(){ return collection.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
+
+onAuthStateChanged(auth, function(user){
+    if(user){
+      currentUserEmail = user.email;
       document.getElementById("gate").style.display = "none";
       document.getElementById("app").style.display = "block";
+      var sub = document.getElementById("brand-sub");
+      if(sub){
+        var uni = user.email.indexOf("uah.es") !== -1 ? "UAH" : "UFV";
+        sub.textContent = uni + " · curso 26/27";
+      }
       startApp();
     } else {
+      currentUserEmail = null;
       document.getElementById("app").style.display = "none";
       document.getElementById("gate").style.display = "flex";
-      if(user && user.email !== ALLOWED_EMAIL){
-        document.getElementById("gate-error").textContent = "Esta app es solo para " + ALLOWED_EMAIL;
-        signOut(auth);
-      }
     }
   });
 
@@ -495,14 +501,14 @@ const db = getFirestore(app);
   }
 
   function subscribeColors(){
-    onSnapshot(doc(db,"settings","colors"), function(snap){
+    onSnapshot(uDoc("settings","colors"), function(snap){
       customColors = snap.exists() ? (snap.data()||{}) : {};
       renderTasks(); renderAvisos(); renderCalendar(); renderHorario();
     }, function(){});
   }
 
   function subscribeMeta(){
-    onSnapshot(doc(db,"meta","sync"), function(snap){
+    onSnapshot(uDoc("meta","sync"), function(snap){
       var data = snap.exists() ? snap.data() : {};
       document.getElementById("tasks-sync-note").textContent = fmtSync(data.tasks_last_sync, "fechas de entrega");
       document.getElementById("avisos-sync-note").textContent = fmtSync(data.avisos_last_sync, "avisos");
@@ -511,7 +517,7 @@ const db = getFirestore(app);
 
   // ---------- AVISOS ----------
   function subscribeAvisos(){
-    var q = query(collection(db,"avisos"), orderBy("posted_at","desc"), limit(200));
+    var q = query(uColl("avisos"), orderBy("posted_at","desc"), limit(200));
     onSnapshot(q, function(qs){
       avisosCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; avisosCache.push(o); });
       renderAvisos();
@@ -532,7 +538,7 @@ const db = getFirestore(app);
     }
     box.innerHTML = items.map(avisoCard).join("");
     box.querySelectorAll("input[type=checkbox][data-avid]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(uDoc("avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
     });
   }
   function avisoCard(a){
@@ -550,7 +556,7 @@ const db = getFirestore(app);
 
   // ---------- TAREAS ----------
   function subscribeTasks(){
-    var q = query(collection(db,"tasks"), orderBy("due_at","asc"), limit(500));
+    var q = query(uColl("tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
       renderTasks(); renderCalendar();
@@ -615,7 +621,7 @@ const db = getFirestore(app);
     var task = tasksCache.find(function(t){ return t.id===id; });
     if(task && task.course) ed.querySelector("select").value = task.course;
     ed.querySelector("button").addEventListener("click", function(){
-      updateDoc(doc(db,"tasks",id), {course: ed.querySelector("select").value}).catch(showError);
+      updateDoc(uDoc("tasks",id), {course: ed.querySelector("select").value}).catch(showError);
       ed.style.display="none";
     });
   }
@@ -625,7 +631,7 @@ const db = getFirestore(app);
     var titleEl = document.getElementById("new-task-title"), dateEl = document.getElementById("new-task-date");
     var title = titleEl.value.trim(); if(!title) return;
     var due_at = dateEl.value ? new Date(dateEl.value+"T23:59:00").toISOString() : null;
-    addDoc(collection(db,"tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
+    addDoc(uColl("tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
       .then(function(){ titleEl.value=""; dateEl.value=""; }).catch(showError);
   });
 
@@ -685,7 +691,7 @@ const db = getFirestore(app);
     items.forEach(function(t){ html += taskRow(t, bucketOf(t, startOfDay(new Date()))); });
     box.innerHTML = html;
     box.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"tasks",cb.dataset.id), {done: cb.checked}).catch(function(){}); });
+      cb.addEventListener("change", function(){ updateDoc(uDoc("tasks",cb.dataset.id), {done: cb.checked}).catch(function(){}); });
     });
   }
 
@@ -748,7 +754,7 @@ const db = getFirestore(app);
   document.getElementById("edit-sched-cancel").addEventListener("click", closeEditSched);
   document.getElementById("edit-sched-delete").addEventListener("click", function(){
     if(!editingSchedId) return;
-    deleteDoc(doc(db,"schedule",editingSchedId)).then(closeEditSched).catch(showError);
+    deleteDoc(uDoc("schedule",editingSchedId)).then(closeEditSched).catch(showError);
   });
   document.getElementById("edit-sched-form").addEventListener("submit", function(e){
     e.preventDefault();
@@ -764,13 +770,13 @@ const db = getFirestore(app);
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    updateDoc(doc(db,"schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+    updateDoc(uDoc("schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
       .then(closeEditSched)
       .catch(showError);
   });
 
   function subscribeSchedule(){
-    onSnapshot(collection(db,"schedule"), function(qs){
+    onSnapshot(uColl("schedule"), function(qs){
       schedCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; schedCache.push(o); });
       renderHorario();
     }, function(){});
@@ -838,7 +844,7 @@ const db = getFirestore(app);
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
     Promise.all(days.map(function(day){
-      return addDoc(collection(db,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color });
+      return addDoc(uColl("schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color });
     })).then(function(){
       document.getElementById("add-sched-form").reset();
       document.getElementById("sched-subject-other").style.display="none";
@@ -877,7 +883,7 @@ const db = getFirestore(app);
     }).then(function(sub){
       if(!sub) return;
       var raw = sub.toJSON();
-      return setDoc(doc(db,"pushSubscriptions", subIdFor(raw.endpoint)), {
+      return setDoc(duDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
         endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
       });
     }).then(function(){
@@ -901,7 +907,7 @@ const db = getFirestore(app);
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
         }).then(function(sub){
           var raw = sub.toJSON();
-          setDoc(doc(db,"pushSubscriptions", subIdFor(raw.endpoint)), {
+          setDoc(uDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
             endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
           }).then(function(){
             var btn = document.getElementById("enable-push");
