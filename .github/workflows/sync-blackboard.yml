@@ -3,7 +3,12 @@ name: Sincronizar Blackboard (UAH)
 on:
   schedule:
     - cron: "23 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      debug_events:
+        description: "Nº de eventos a volcar enteros en el log (0 = ninguno)"
+        required: false
+        default: "0"
 
 jobs:
   sync:
@@ -20,4 +25,5 @@ jobs:
           BLACKBOARD_ICS_URL: ${{ secrets.BLACKBOARD_ICS_URL }}
           FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          DEBUG_EVENTS: ${{ github.event.inputs.debug_events || '0' }}
         run: python sync_blackboard.py

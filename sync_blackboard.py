@@ -9,6 +9,8 @@ Variables de entorno necesarias:
                         (empieza por https://xxx.blackboard.com/webapps/calendar/calendarFeed/...)
   FIREBASE_CREDENTIALS el JSON completo de la cuenta de servicio de Firebase (como texto)
   VAPID_PRIVATE_KEY    opcional, para avisos push
+  DEBUG_EVENTS          opcional, número de eventos de los que volcar TODOS los campos
+                        en el log (para depurar). 0 = no volcar nada (por defecto).
 """
 
 import os
@@ -38,12 +40,12 @@ APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
 
 MADRID = ZoneInfo("Europe/Madrid")
 
-# ---------------------------------------------------------------------------
-# Blackboard no deja consultar "qué asignaturas tienes en favoritos" por API,
-# así que a diferencia de Canvas esta lista NO se actualiza sola. Si cambias
-# de cuatrimestre o de favoritos, actualiza aquí el código (lo que sale debajo
-# de la imagen de cada curso, tipo "APY6L26") y el nombre bonito para mostrar.
-# ---------------------------------------------------------------------------
+# Cuántos eventos volcar enteros en el log (solo para depurar; 0 = desactivado).
+DEBUG_EVENTS = int(os.environ.get("DEBUG_EVENTS", "0") or "0")
+
+# Códigos de curso de Blackboard -> nombre bonito para mostrar en la app.
+# Hay que actualizar esto a mano cada cuatrimestre (Blackboard no tiene un
+# equivalente a los "favoritos" de Canvas a los que se pueda preguntar por API).
 COURSE_MAP = {
     "APY6L26": "Conmutación",
     "8WQD726": "Electrónica de potencia",
@@ -62,33 +64,8 @@ def user_ref(db):
 
 def clean_title(title):
     title = re.sub(r"\s*\[[^\]]*\]\s*$", "", title or "").strip()
-    # quita el prefijo de curso académico tipo "2026-27: " si lo lleva
     title = re.sub(r"^\d{4}-\d{2}:\s*", "", title).strip()
     return title
-
-
-def match_course(component):
-    """Busca el código de la asignatura (p.ej. APY6L26) en los campos del evento
-    para saber de qué asignatura es, en vez de adivinarlo por el texto."""
-    fields = ("SUMMARY", "DESCRIPTION", "CATEGORIES", "LOCATION", "UID")
-    haystack = " ".join(str(component.get(f) or "") for f in fields)
-    for code, name in COURSE_MAP.items():
-        if code in haystack:
-            return name
-    return ""
-
-
-def split_course_title(summary):
-    """Respaldo para eventos donde no se reconoce el código: intenta separar
-    'Asignatura: Título' por los separadores típicos."""
-    summary = clean_title(summary)
-    for sep in (":", " - ", "–"):
-        if sep in summary:
-            course, _, title = summary.partition(sep)
-            course, title = course.strip(), title.strip()
-            if course and title:
-                return course, title
-    return "", summary
 
 
 class ChunkedBatch:
@@ -129,6 +106,30 @@ def fetch_ics():
     return resp.content
 
 
+def match_course(component):
+    """Busca alguno de los códigos de COURSE_MAP dentro de los campos del evento."""
+    fields = ("SUMMARY", "DESCRIPTION", "CATEGORIES", "LOCATION", "UID")
+    haystack = " ".join(str(component.get(f) or "") for f in fields)
+    for code, name in COURSE_MAP.items():
+        if code in haystack:
+            return name
+    return ""
+
+
+def split_course_title(summary):
+    """Blackboard suele poner el nombre de la asignatura y el título del evento juntos,
+    normalmente separados por ':' o '-'. Si no hay separador, todo va como título y la
+    asignatura se deja vacía (se puede rellenar a mano desde la propia app)."""
+    summary = clean_title(summary)
+    for sep in (":", " - ", "–"):
+        if sep in summary:
+            course, _, title = summary.partition(sep)
+            course, title = course.strip(), title.strip()
+            if course and title:
+                return course, title
+    return "", summary
+
+
 def event_datetime(value):
     """Un VEVENT de icalendar puede traer un 'date' (evento de todo el día) o un
     'datetime' con hora. Normaliza ambos a un datetime con zona horaria de Madrid."""
@@ -139,6 +140,13 @@ def event_datetime(value):
     if isinstance(value, date):
         return datetime.combine(value, dtime(23, 59), tzinfo=MADRID)
     return None
+
+
+def dump_event_debug(n, component):
+    print(f"--- DEBUG evento #{n}: TODOS los campos ---", file=sys.stderr)
+    for key, value in component.items():
+        print(f"  {key} = {value!r}", file=sys.stderr)
+    print("--- fin DEBUG ---", file=sys.stderr)
 
 
 def sync_blackboard_calendar(db):
@@ -153,11 +161,17 @@ def sync_blackboard_calendar(db):
     new_count = 0
     new_events = []
     now_iso = datetime.now(timezone.utc).isoformat()
+    debug_dumped = 0
 
     for component in cal.walk("VEVENT"):
         uid = str(component.get("UID") or "")
         if not uid:
             continue
+
+        if debug_dumped < DEBUG_EVENTS:
+            debug_dumped += 1
+            dump_event_debug(debug_dumped, component)
+
         doc_id = "bb-" + hashlib.md5(uid.encode("utf-8")).hexdigest()[:16]
 
         raw_summary = str(component.get("SUMMARY") or "(sin título)")
