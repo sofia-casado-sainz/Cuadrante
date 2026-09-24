@@ -49,7 +49,7 @@ SESSION.headers.update({"Authorization": f"Bearer {TOKEN}"})
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_CLAIMS_SUB = "mailto:9206029@alumnos.ufv.es"
 # RELLENA con la URL real de tu GitHub Pages (Paso 5 del README), p.ej. "https://tu-usuario.github.io/cuadrante/"
-APP_URL = "https://TU-USUARIO.github.io/cuadrante/"
+APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
 
 
 def get_all_pages(url, params=None):

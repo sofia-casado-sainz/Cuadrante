@@ -36,7 +36,7 @@ OWNER_EMAIL = "ana.ecenarro@edu.uah.es"
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_CLAIMS_SUB = f"mailto:{OWNER_EMAIL}"
 # RELLENA con la URL real de tu GitHub Pages (la misma app, Paso 5 del README)
-APP_URL = "https://TU-USUARIO.github.io/cuadrante/"
+APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
 
 MADRID = ZoneInfo("Europe/Madrid")
 
