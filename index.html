@@ -263,7 +263,11 @@
             <select id="edit-sched-subject"></select>
             <input type="text" id="edit-sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div class="full">
+            <label class="checkline"><input type="checkbox" id="edit-sched-oneoff"> Solo esta semana (no se repite)</label>
+          </div>
+          <div id="edit-sched-day-wrap"><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div id="edit-sched-date-wrap" style="display:none;"><label>Fecha</label><input type="date" id="edit-sched-date"></div>
           <div><label>Aula (opcional)</label><input type="text" id="edit-sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="edit-sched-start"></div>
           <div><label>Hora fin</label><input type="time" id="edit-sched-end"></div>
@@ -285,6 +289,9 @@
             <input type="text" id="sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
           <div class="full">
+            <label class="checkline"><input type="checkbox" id="sched-oneoff"> Solo esta semana (no se repite)</label>
+          </div>
+          <div class="full" id="sched-days-wrap">
             <label>Días (elige uno o varios)</label>
             <div class="sched-days">
               <label class="checkline"><input type="checkbox" class="sched-day-check" value="Lunes"> Lunes</label>
@@ -295,6 +302,10 @@
               <label class="checkline"><input type="checkbox" class="sched-day-check" value="Sábado"> Sábado</label>
               <label class="checkline"><input type="checkbox" class="sched-day-check" value="Domingo"> Domingo</label>
             </div>
+          </div>
+          <div class="full" id="sched-date-wrap" style="display:none;">
+            <label>Fecha</label>
+            <input type="date" id="sched-date">
           </div>
           <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="sched-start" value="09:00"></div>
@@ -355,20 +366,30 @@ const db = getFirestore(app);
 (function(){
   "use strict";
 
-  var SUBJECTS = [
-    "Aprendizaje estadístico y data mining","Computación de alto rendimiento","Emprendimiento e innovación",
-    "Internet of Things","Ingeniería del Software II","La cuestión de Dios",
-    "Planificación y gestión de proyectos informáticos","Roboética en el cuidado de la salud","Seguridad"
-  ];
   var PALETTE = ["#24566A","#A8792E","#6E7B4A","#A6402E","#4C6E8C","#7A5C3E","#5C7A63","#8C5A6E","#3E6E5C"];
 
     var customColors = {};
   function colorFor(name){
     if(!name) return "#8B948A";
     if(customColors[name]) return customColors[name];
-    var idx = SUBJECTS.indexOf(name);
-    if(idx === -1){ var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; } idx=h%PALETTE.length; }
-    return PALETTE[idx % PALETTE.length];
+    var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; }
+    return PALETTE[h % PALETTE.length];
+  }
+  function knownSubjects(){
+    var set = {};
+    tasksCache.forEach(function(t){ if(t.course) set[t.course] = true; });
+    schedCache.forEach(function(b){ if(b.subject) set[b.subject] = true; });
+    return Object.keys(set).sort(function(a,b){ return a.localeCompare(b, "es"); });
+  }
+  function populateSubjectSelect(selectEl){
+    if(!selectEl) return;
+    var current = selectEl.value;
+    var subjects = knownSubjects();
+    var html = "";
+    subjects.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    html += '<option value="__other__">Otra…</option>';
+    selectEl.innerHTML = html;
+    if(current && (subjects.indexOf(current) !== -1 || current === "__other__")){ selectEl.value = current; }
   }
   function saveColor(subject, hex){
     if(!subject) return;
@@ -615,7 +636,7 @@ onAuthStateChanged(auth, function(user){
     var ed = row.querySelector(".course-editor");
     if(ed.style.display !== "none"){ ed.style.display="none"; ed.innerHTML=""; return; }
     var sel = '<select><option value="">Sin asignatura</option>';
-    SUBJECTS.forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    knownSubjects().forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
     sel += '</select> <button class="btn small">Guardar</button>';
     ed.innerHTML = sel; ed.style.display = "flex";
     var task = tasksCache.find(function(t){ return t.id===id; });
@@ -709,24 +730,24 @@ onAuthStateChanged(auth, function(user){
     }
     return {start:minH, end:maxH};
   }
-  (function(){
-    var sel = document.getElementById("sched-subject"); var html="";
-    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
-    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
-  })();
-    document.getElementById("sched-subject").addEventListener("change", function(){
+  populateSubjectSelect(document.getElementById("sched-subject"));
+  document.getElementById("sched-subject").addEventListener("change", function(){
     document.getElementById("sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("sched-color").value = colorFor(this.value);
   });
+  document.getElementById("sched-oneoff").addEventListener("change", function(){
+    document.getElementById("sched-days-wrap").style.display = this.checked ? "none" : "block";
+    document.getElementById("sched-date-wrap").style.display = this.checked ? "block" : "none";
+  });
 
-  (function(){
-    var sel = document.getElementById("edit-sched-subject"); var html="";
-    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
-    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
-  })();
+  populateSubjectSelect(document.getElementById("edit-sched-subject"));
   document.getElementById("edit-sched-subject").addEventListener("change", function(){
     document.getElementById("edit-sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("edit-sched-color").value = colorFor(this.value);
+  });
+  document.getElementById("edit-sched-oneoff").addEventListener("change", function(){
+    document.getElementById("edit-sched-day-wrap").style.display = this.checked ? "none" : "block";
+    document.getElementById("edit-sched-date-wrap").style.display = this.checked ? "block" : "none";
   });
 
   var editingSchedId = null;
@@ -734,12 +755,17 @@ onAuthStateChanged(auth, function(user){
     var b = schedCache.find(function(x){ return x.id===id; });
     if(!b) return;
     editingSchedId = id;
+    populateSubjectSelect(document.getElementById("edit-sched-subject"));
     var sel = document.getElementById("edit-sched-subject");
-    var known = SUBJECTS.indexOf(b.subject) !== -1;
+    var known = knownSubjects().indexOf(b.subject) !== -1;
     sel.value = known ? b.subject : "__other__";
     document.getElementById("edit-sched-subject-other").style.display = known ? "none" : "block";
     document.getElementById("edit-sched-subject-other").value = known ? "" : b.subject;
+    document.getElementById("edit-sched-oneoff").checked = !!b.date;
+    document.getElementById("edit-sched-day-wrap").style.display = b.date ? "none" : "block";
+    document.getElementById("edit-sched-date-wrap").style.display = b.date ? "block" : "none";
     document.getElementById("edit-sched-day").value = b.day;
+    document.getElementById("edit-sched-date").value = b.date || "";
     document.getElementById("edit-sched-room").value = b.room || "";
     document.getElementById("edit-sched-start").value = b.start;
     document.getElementById("edit-sched-end").value = b.end;
@@ -764,21 +790,46 @@ onAuthStateChanged(auth, function(user){
       subject = document.getElementById("edit-sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var day = document.getElementById("edit-sched-day").value, room = document.getElementById("edit-sched-room").value.trim();
+    var oneoff = document.getElementById("edit-sched-oneoff").checked;
+    var day, date;
+    if(oneoff){
+      date = document.getElementById("edit-sched-date").value;
+      if(!date){ showError({message:"Elige una fecha."}); return; }
+      day = DOW_NAMES[new Date(date+"T12:00:00").getDay()];
+    } else {
+      day = document.getElementById("edit-sched-day").value;
+      date = null;
+    }
+    var room = document.getElementById("edit-sched-room").value.trim();
     var start = document.getElementById("edit-sched-start").value, end = document.getElementById("edit-sched-end").value;
     var color = document.getElementById("edit-sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    updateDoc(uDoc("schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+    updateDoc(uDoc("schedule",editingSchedId), { subject:subject, day:day, date:date, room:room, start:start, end:end, color:color })
       .then(closeEditSched)
       .catch(showError);
   });
-
+  var DOW_NAMES = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+  function weekRangeOfToday(){
+    var now = new Date();
+    var dow = (now.getDay()+6)%7;
+    var monday = new Date(now); monday.setHours(0,0,0,0); monday.setDate(now.getDate()-dow);
+    var sunday = new Date(monday); sunday.setDate(monday.getDate()+6); sunday.setHours(23,59,59,999);
+    return {start:monday, end:sunday};
+  }
+  function isVisibleThisWeek(b){
+    if(!b.date) return true;
+    var d = new Date(b.date+"T12:00:00");
+    var range = weekRangeOfToday();
+    return d >= range.start && d <= range.end;
+  }
   function subscribeSchedule(){
     onSnapshot(uColl("schedule"), function(qs){
       schedCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; schedCache.push(o); });
       renderHorario();
+      populateSubjectSelect(document.getElementById("sched-subject"));
+      populateSubjectSelect(document.getElementById("edit-sched-subject"));
     }, function(){});
   }
   function renderHorario(){
@@ -792,11 +843,11 @@ onAuthStateChanged(auth, function(user){
     html += '</div>';
     DOWS.forEach(function(day){
       html += '<div class="h-col" style="height:'+totalH+'px;">';
-      schedCache.filter(function(b){ return b.day===day; }).forEach(function(b){
+      schedCache.filter(function(b){ return b.day===day && isVisibleThisWeek(b); }).forEach(function(b){
         var sm=toMinutes(b.start), em=toMinutes(b.end);
         var top=Math.max(0,(sm-H_START*60))*(HOUR_PX/60), height=Math.max(20,(em-sm))*(HOUR_PX/60);
         var col = b.color || colorFor(b.subject);
-        html += '<div class="h-block" data-id="'+esc(b.id)+'" style="top:'+top+'px;height:'+height+'px;background:'+col+';"><div class="t">'+esc(b.subject)+'</div><div class="r">'+esc(b.start)+'–'+esc(b.end)+(b.room?(" · "+esc(b.room)):"")+'</div></div>';
+        html += '<div class="h-block" data-id="'+esc(b.id)+'" style="top:'+top+'px;height:'+height+'px;background:'+col+';"><div class="t">'+esc(b.subject)+(b.date?" 📌":"")+'</div><div class="r">'+esc(b.start)+'–'+esc(b.end)+(b.room?(" · "+esc(b.room)):"")+'</div></div>';
       });
       html += '</div>';
     });
@@ -805,7 +856,7 @@ onAuthStateChanged(auth, function(user){
 
     var dowIdx = new Date().getDay();
     var todayName = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][dowIdx];
-    var todayItems = schedCache.filter(function(b){ return b.day === todayName; }).sort(function(a,b){ return toMinutes(a.start)-toMinutes(b.start); });
+    var todayItems = schedCache.filter(function(b){ return b.day === todayName && isVisibleThisWeek(b); }).sort(function(a,b){ return toMinutes(a.start)-toMinutes(b.start); });
     var todayBox = document.getElementById("horario-today");
     if(todayBox){
       if(!todayItems.length){
@@ -820,7 +871,7 @@ onAuthStateChanged(auth, function(user){
     }
 
     var listBox = document.getElementById("sched-list");
-    var sixth = schedCache.filter(function(b){ return b.day==="Sábado" || b.day==="Domingo"; });
+    var sixth = schedCache.filter(function(b){ return (b.day==="Sábado" || b.day==="Domingo") && isVisibleThisWeek(b); });
     listBox.innerHTML = sixth.length ? ("<div class='muted' style='margin-bottom:6px;'>Fuera de la vista semanal:</div>" +
       sixth.map(function(b){ return '<div class="sched-item"><span>'+esc(b.subject)+' — '+esc(b.day)+' '+esc(b.start)+'–'+esc(b.end)+'</span><button class="btn small" data-edit="'+esc(b.id)+'">Editar</button></div>'; }).join("")) : "";
     listBox.querySelectorAll("[data-edit]").forEach(function(btn){ btn.addEventListener("click", function(){ openEditSched(btn.dataset.edit); }); });
@@ -834,21 +885,34 @@ onAuthStateChanged(auth, function(user){
       subject = document.getElementById("sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var days = Array.prototype.map.call(document.querySelectorAll(".sched-day-check:checked"), function(cb){ return cb.value; });
-    if(!days.length){ showError({message:"Elige al menos un día."}); return; }
+    var oneoff = document.getElementById("sched-oneoff").checked;
     var room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
     var color = document.getElementById("sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
+
+    var entries = [];
+    if(oneoff){
+      var dateVal = document.getElementById("sched-date").value;
+      if(!dateVal){ showError({message:"Elige una fecha."}); return; }
+      var day = DOW_NAMES[new Date(dateVal+"T12:00:00").getDay()];
+      entries.push({ subject:subject, day:day, date:dateVal, room:room, start:start, end:end, color:color });
+    } else {
+      var days = Array.prototype.map.call(document.querySelectorAll(".sched-day-check:checked"), function(cb){ return cb.value; });
+      if(!days.length){ showError({message:"Elige al menos un día."}); return; }
+      days.forEach(function(day){ entries.push({ subject:subject, day:day, date:null, room:room, start:start, end:end, color:color }); });
+    }
+
     saveColor(subject, color);
-    Promise.all(days.map(function(day){
-      return addDoc(uColl("schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color });
-    })).then(function(){
-      document.getElementById("add-sched-form").reset();
-      document.getElementById("sched-subject-other").style.display="none";
-      document.getElementById("sched-color").value="#24566A";
-    }).catch(showError);
+    Promise.all(entries.map(function(entry){ return addDoc(uColl("schedule"), entry); }))
+      .then(function(){
+        document.getElementById("add-sched-form").reset();
+        document.getElementById("sched-subject-other").style.display="none";
+        document.getElementById("sched-color").value="#24566A";
+        document.getElementById("sched-days-wrap").style.display="block";
+        document.getElementById("sched-date-wrap").style.display="none";
+      }).catch(showError);
   });
 
   // ---------- Avisos push (iPhone añadido a pantalla de inicio) ----------
