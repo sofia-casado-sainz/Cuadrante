@@ -263,8 +263,8 @@
             <select id="edit-sched-subject"></select>
             <input type="text" id="edit-sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div><label>Día (puedes tocar varios)</label><select id="sched-day" multiple size="4"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
-          <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
+          <div><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
+          <div><label>Aula (opcional)</label><input type="text" id="edit-sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="edit-sched-start"></div>
           <div><label>Hora fin</label><input type="time" id="edit-sched-end"></div>
           <div><label>Color</label><input type="color" id="edit-sched-color"></div>
@@ -590,7 +590,7 @@ onAuthStateChanged(auth, function(user){
     if(!any){ html = '<div class="empty-state"><div class="big">✅</div>'+(tasksCache.length?"No hay tareas pendientes con estos filtros.":"No hay tareas todavía.")+'</div>'; }
     list.innerHTML = html;
     list.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(uDoc("tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
     list.querySelectorAll(".pill.editable").forEach(function(p){ p.addEventListener("click", function(){ toggleCourseEditor(p); }); });
   }
@@ -834,8 +834,7 @@ onAuthStateChanged(auth, function(user){
       subject = document.getElementById("sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var daySel = document.getElementById("sched-day");
-    var days = Array.prototype.map.call(daySel.selectedOptions, function(o){ return o.value; });
+    var days = Array.prototype.map.call(document.querySelectorAll(".sched-day-check:checked"), function(cb){ return cb.value; });
     if(!days.length){ showError({message:"Elige al menos un día."}); return; }
     var room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
@@ -883,7 +882,7 @@ onAuthStateChanged(auth, function(user){
     }).then(function(sub){
       if(!sub) return;
       var raw = sub.toJSON();
-      return setDoc(duDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
+      return setDoc(uDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
         endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
       });
     }).then(function(){
