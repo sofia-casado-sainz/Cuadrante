@@ -43,7 +43,10 @@
 
   header.top{
     position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
-    padding:18px 0 10px 0; z-index:20; border-bottom:1px solid var(--border); margin-bottom:16px;
+    padding:18px 0 10px 0; z-index:20; border-bottom:1px solid var(--border);
+    /* El espacio hasta el panel de abajo NO va aquí (margin-bottom en un elemento
+       sticky no siempre empuja el contenido en Safari de iPhone) — va en el
+       margin-top de <main>, justo abajo. */
   }
   .brand{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .brand h1{ font-size:26px; font-weight:600; letter-spacing:-0.01em; }
@@ -57,7 +60,7 @@
   nav.tabs button.active{ background:var(--accent); color:#fff; }
   nav.tabs button:not(.active):hover{ background:var(--surface-2); color:var(--ink); }
 
-  main{ max-width:760px; margin:0 auto; }
+  main{ max-width:760px; margin:16px auto 0; }
   section.view{ display:none; }
   section.view.active{ display:block; animation:fade .25s ease; }
   @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
