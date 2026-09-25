@@ -93,18 +93,26 @@ que sean estables en el tiempo, y sé honesto/genérico antes que inventar."""
                     "resumen": {"type": "STRING"},
                     "items": {
                         "type": "ARRAY",
+                        "minItems": 5,
+                        "maxItems": 5,
                         "items": {
                             "type": "OBJECT",
                             "properties": {
-                                "categoria": {"type": "STRING"},
+                                "categoria": {
+                                    "type": "STRING",
+                                    "enum": ["ia", "informatica", "politica", "mundo", "curiosidad"],
+                                },
                                 "titulo": {"type": "STRING"},
                                 "texto": {"type": "STRING"},
                             },
+                            "required": ["categoria", "titulo", "texto"],
                         },
                     },
                 },
+                "required": ["resumen", "items"],
             },
             "temperature": 0.9,
+            "maxOutputTokens": 4096,
         },
     }
     data = llamar_gemini(body)
@@ -123,6 +131,20 @@ def main():
 
     contenido = pedir_newsletter_a_gemini()
     items = [it for it in contenido.get("items", []) if it.get("titulo") and it.get("texto")]
+
+    if not items:
+        # Gemini a veces devuelve un JSON válido pero con la lista de noticias
+        # vacía o incompleta (pasó el 25/09/2026: el "resumen" llegó bien pero
+        # "items" vino a 0). En vez de guardar una newsletter sin noticias y
+        # borrar la de la semana pasada, fallamos fuerte: así la ejecución
+        # sale en rojo en Actions (se nota que algo fue mal) y la app se
+        # queda con la última newsletter buena que hubiera.
+        raise RuntimeError(
+            "Gemini devolvió la respuesta pero sin ninguna noticia utilizable "
+            "('items' vacío o con titulo/texto en blanco) — no se sobrescribe "
+            "la newsletter de la semana pasada. Respuesta cruda para depurar: "
+            + json.dumps(contenido)[:800]
+        )
 
     db.collection("newsletter").document("actual").set({
         "fecha": datetime.now(timezone.utc).isoformat(),

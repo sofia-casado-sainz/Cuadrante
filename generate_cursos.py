@@ -92,6 +92,8 @@ basta para buscarlo."""
             "response_mime_type": "application/json",
             "response_schema": {
                 "type": "ARRAY",
+                "minItems": 5,
+                "maxItems": 5,
                 "items": {
                     "type": "OBJECT",
                     "properties": {
@@ -99,9 +101,11 @@ basta para buscarlo."""
                         "nombre": {"type": "STRING"},
                         "por_que": {"type": "STRING"},
                     },
+                    "required": ["plataforma", "nombre", "por_que"],
                 },
             },
             "temperature": 0.8,
+            "maxOutputTokens": 4096,
         },
     }
     data = llamar_gemini(body)
@@ -125,6 +129,13 @@ def main():
                 c for c in candidatos
                 if c.get("plataforma") and c.get("nombre")
             ]
+            if not sugerencias:
+                # Igual que con la newsletter: si Gemini no devuelve nada
+                # aprovechable, no pisamos las sugerencias del mes pasado.
+                raise RuntimeError(
+                    "respuesta sin cursos utilizables. Respuesta cruda: "
+                    + json.dumps(candidatos)[:500]
+                )
             db.collection("users").document(email).collection("cursos").document("actual").set({
                 "fecha": datetime.now(timezone.utc).isoformat(),
                 "universidad": perfil["universidad"],
