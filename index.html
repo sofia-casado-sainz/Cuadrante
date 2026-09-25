@@ -163,11 +163,6 @@
   #err-toast .close{ float:right; cursor:pointer; margin-left:10px; }
 
   /* Más (link-out) */
-  .more-card{ display:block; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; background:var(--surface); text-decoration:none; color:var(--ink); }
-  .more-card:hover{ background:var(--surface-2); }
-  .more-card .t{ font-weight:600; font-size:15px; }
-  .more-card .d{ font-size:12.5px; color:var(--ink-dim); margin-top:3px; }
-
   /* Meter (progreso de tareas) — relleno en --accent, pista en --accent-tint (mismo tono, más claro) */
   .meter-head{ display:flex; justify-content:space-between; align-items:baseline; }
   .meter-value{ font-size:22px; font-weight:600; color:var(--ink); }
@@ -207,7 +202,6 @@
     <button data-tab="calendario">Calendario</button>
     <button data-tab="horario">Horario</button>
     <button data-tab="retos">Retos</button>
-    <button data-tab="mas">Más</button>
   </nav>
 </header>
 
@@ -342,16 +336,6 @@
     </div>
   </section>
 
-  <section class="view" id="view-mas">
-    <div class="panel">
-      <div class="panel-head"><h2>Más</h2></div>
-      <div class="muted" style="margin-bottom:10px;">Newsletter semanal y sugerencias de cursos: estas dos viven en tu panel de Claude, porque se generan con IA.</div>
-      <a class="more-card" href="https://claude.ai/artifact/8MtYBJJA2hKbA2u4EW12ak" target="_blank" rel="noopener">
-        <div class="t">Newsletter y Cursos ↗</div>
-        <div class="d">Abre el panel de Claude para ver la newsletter de los lunes y las sugerencias de certificaciones.</div>
-      </a>
-    </div>
-  </section>
 
 </main>
 </div>
