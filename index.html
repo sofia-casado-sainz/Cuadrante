@@ -200,6 +200,7 @@
     <button data-tab="avisos">Avisos</button>
     <button data-tab="calendario">Calendario</button>
     <button data-tab="horario">Horario</button>
+    <button data-tab="retos">Retos</button>
     <button data-tab="mas">Más</button>
   </nav>
 </header>
@@ -317,6 +318,14 @@
     </div>
   </section>
 
+  <section class="view" id="view-retos">
+    <div class="panel">
+      <div class="panel-head"><h2>Retos</h2></div>
+      <div class="muted" style="line-height:1.5;margin-bottom:10px;">Un reto de hábitos saludables por día, elegido de un catálogo compartido que crece solo cada mes con IA. Cambia cada día, sin que tengas que hacer nada.</div>
+      <div id="reto-content"><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div></div>
+    </div>
+  </section>
+
   <section class="view" id="view-mas">
     <div class="panel">
       <div class="panel-head"><h2>Más</h2></div>
@@ -339,7 +348,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, onSnapshot, query, orderBy, limit,
+  getFirestore, collection, doc, onSnapshot, query, orderBy, limit, getDocs,
   setDoc, updateDoc, deleteDoc, addDoc
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -481,6 +490,32 @@ const db = getFirestore(app);
     if(started) return; started = true;
     subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors(); subscribeAgenda();
     renderCalendar();
+    loadRetoDelDia();
+  }
+
+  // ---------- Retos (catálogo compartido de hábitos saludables — un reto por día) ----------
+  var CATEGORIA_LABEL = {
+    manana:"Por la mañana", movimiento:"Movimiento", alimentacion:"Alimentación", sueno:"Sueño",
+    mente:"Mente", digital:"Desconexión digital", social:"Social", estudio:"Estudio",
+    autocuidado:"Autocuidado", aire_libre:"Aire libre", varios:"General"
+  };
+  function loadRetoDelDia(){
+    var box = document.getElementById("reto-content");
+    getDocs(collection(db,"retos")).then(function(qs){
+      var retos = [];
+      qs.forEach(function(d){ var r=d.data(); r.id=d.id; if(r.texto) retos.push(r); });
+      if(!retos.length){ box.innerHTML = '<div class="muted">Todavía no hay retos en el catálogo — aparecerán solos en cuanto corra el robot que los siembra.</div>'; return; }
+      retos.sort(function(a,b){ return a.id<b.id ? -1 : (a.id>b.id ? 1 : 0); }); // orden estable, igual para todo el mundo
+      var dias = Math.floor(Date.now()/86400000); // mismo reto todo el día, cambia cada medianoche UTC
+      var reto = retos[dias % retos.length];
+      var label = CATEGORIA_LABEL[reto.categoria] || "";
+      box.innerHTML =
+        (label ? '<span class="pill" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);display:inline-block;margin-bottom:12px;">'+esc(label)+'</span><br>' : '') +
+        '<div style="font-size:18px;line-height:1.5;">'+esc(reto.texto)+'</div>';
+    }).catch(function(e){
+      box.innerHTML = '<div class="muted">No se pudo cargar el reto de hoy.</div>';
+      showError(e);
+    });
   }
 
   function subscribeColors(){
