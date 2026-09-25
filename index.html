@@ -61,8 +61,8 @@
   section.view.active{ display:block; animation:fade .25s ease; }
   @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
 
-  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
-  .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
+  .panel{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .panel-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap;}
   .panel-head h2{ font-size:18px; font-weight:600; }
   .muted{ color:var(--ink-faint); font-size:12.5px; }
   .btn{ font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; border-radius:8px; padding:8px 12px; border:1px solid var(--border); background:var(--surface); color:var(--ink); transition:background-color .15s ease, filter .15s ease, transform .1s ease, border-color .15s ease; }
@@ -80,7 +80,7 @@
 
   .bucket-label{ font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:16px 0 6px; font-weight:600; }
   .bucket-label:first-child{ margin-top:0; }
-  .task-row{ display:flex; align-items:flex-start; gap:10px; padding:10px 4px; border-bottom:1px solid var(--border); animation:itemIn .3s ease both; }
+  .task-row{ display:flex; align-items:flex-start; gap:10px; padding:8px 4px; border-bottom:1px solid var(--border); animation:itemIn .3s ease both; }
   .task-row:last-child{ border-bottom:none; }
   .task-row input[type=checkbox]{ width:19px; height:19px; margin-top:2px; accent-color:var(--accent); flex:none; cursor:pointer; }
   .task-main{ flex:1; min-width:0; }
@@ -481,6 +481,47 @@ const db = getFirestore(app);
       try{ localStorage.setItem("cuadrante_last_tab", btn.dataset.tab); }catch(e){}
     });
   });
+
+  // ---------- Deslizar para cambiar de pestaña (desde cualquier parte de la pantalla) ----------
+  (function(){
+    var startX = 0, startY = 0, tracking = false;
+    var MIN_DIST = 55;     // px horizontales mínimos para que cuente como swipe
+    var MAX_OFF_AXIS = 60; // px verticales máximos permitidos (si se mueve más, es scroll, no swipe)
+
+    function dentroDeZonaExcluida(target){
+      // No interceptamos el gesto si empieza dentro de algo que ya se desliza
+      // horizontalmente por sí mismo (la propia barra de pestañas, el horario) o
+      // dentro de un campo de texto (para no interferir con seleccionar texto).
+      return !!target.closest("nav.tabs, .horario-wrap, input, textarea, select");
+    }
+
+    document.addEventListener("touchstart", function(e){
+      if(e.touches.length !== 1 || dentroDeZonaExcluida(e.target)){ tracking = false; return; }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }, {passive:true});
+
+    document.addEventListener("touchend", function(e){
+      if(!tracking) return;
+      tracking = false;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - startX;
+      var dy = t.clientY - startY;
+      if(Math.abs(dx) < MIN_DIST || Math.abs(dy) > MAX_OFF_AXIS) return;
+
+      // Solo entre las pestañas visibles (a Ana, por ejemplo, "Avisos" no le aparece en la barra).
+      var tabArr = Array.prototype.slice.call(tabs).filter(function(b){ return b.offsetParent !== null; });
+      var actual = tabArr.findIndex(function(b){ return b.classList.contains("active"); });
+      if(actual === -1) return;
+      var siguiente = dx < 0 ? actual + 1 : actual - 1; // izquierda → siguiente, derecha → anterior
+      if(siguiente < 0 || siguiente >= tabArr.length) return;
+
+      var nombre = tabArr[siguiente].dataset.tab;
+      activateTab(nombre);
+      try{ localStorage.setItem("cuadrante_last_tab", nombre); }catch(err){}
+    }, {passive:true});
+  })();
 
   // ---------- Preferencias que se recuerdan solas (no hace falta repetirlas cada vez) ----------
   try{
