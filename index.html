@@ -355,7 +355,7 @@
 </main>
 </div>
 
-<div id="err-toast"><span class="close" id="err-toast-close">&times;</span><b>No se pudo guardar</b><span id="err-toast-msg"></span></div>
+<div id="err-toast"><span class="close" id="err-toast-close">&times;</span><b id="err-toast-title">No se pudo guardar</b><span id="err-toast-msg"></span></div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
@@ -363,7 +363,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, onSnapshot, query, orderBy, limit, getDocs, getDoc,
+  initializeFirestore, collection, doc, onSnapshot, query, orderBy, limit, getDocs, getDoc,
   setDoc, updateDoc, deleteDoc, addDoc
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
@@ -393,7 +393,11 @@ const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Dentro de la app instalada en el móvil (sobre todo en iPhone), a veces el canal en
+// tiempo real de Firestore se queda mudo — no da error, simplemente nunca llega nada.
+// experimentalAutoDetectLongPolling hace que detecte solo si eso está pasando y, si es
+// así, use sondeo normal en vez del canal en tiempo real (un pelín más lento, pero fiable).
+const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
 
 (function(){
   "use strict";
@@ -546,13 +550,36 @@ const db = getFirestore(app);
   var rachaCache = { racha: 0, ultimo_dia: null };
 
    var errToastTimer = null;
-  function showError(err){
+  function showError(err, titulo){
     var box = document.getElementById("err-toast");
     var msg = (err && (err.message || err.code)) ? (err.code ? err.code+" — "+err.message : err.message) : "Error desconocido.";
+    document.getElementById("err-toast-title").textContent = titulo || "No se pudo guardar";
     document.getElementById("err-toast-msg").textContent = " " + msg;
     box.style.display = "block";
     if(errToastTimer) clearTimeout(errToastTimer);
     errToastTimer = setTimeout(function(){ box.style.display = "none"; }, 12000);
+  }
+
+  // ---------- Aviso si la app se queda cargando sin llegar nunca ningún dato ----------
+  // (pasa sobre todo dentro de la app instalada en iPhone: el canal de Firestore se
+  // queda mudo sin dar ningún error). Si en unos segundos no ha llegado ni un solo dato,
+  // avisamos claramente en vez de dejar los esqueletos de carga girando para siempre.
+  var primerDatoLlegado = false;
+  var watchdogConexion = null;
+  function iniciarWatchdogConexion(){
+    watchdogConexion = setTimeout(function(){
+      if(!primerDatoLlegado){
+        showError(
+          { message: "Llevamos más de 10 segundos sin recibir nada del servidor. Comprueba tu conexión; si sigue igual, cierra la app del todo y vuelve a abrirla." },
+          "No se pudo conectar"
+        );
+      }
+    }, 10000);
+  }
+  function marcarConexionOk(){
+    if(primerDatoLlegado) return;
+    primerDatoLlegado = true;
+    if(watchdogConexion){ clearTimeout(watchdogConexion); watchdogConexion = null; }
   }
   document.getElementById("err-toast-close").addEventListener("click", function(){
     document.getElementById("err-toast").style.display = "none";
@@ -567,6 +594,7 @@ const db = getFirestore(app);
 
   function startApp(){
     if(started) return; started = true;
+    iniciarWatchdogConexion();
     subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors(); subscribeAgenda();
     renderCalendar();
     loadRetoDelDia();
@@ -752,9 +780,13 @@ const db = getFirestore(app);
   function subscribeTasks(){
     var q = query(collection(db,"users",myEmail,"tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
+      marcarConexionOk();
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
       renderTasks(); renderCalendar(); renderAgenda(); renderTaskProgress();
-    }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
+    }, function(err){
+      marcarConexionOk(); // ha respondido el servidor (aunque sea con un error), así que ya no es "no llega nada"
+      document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>';
+    });
   }
   document.getElementById("hide-done").addEventListener("change", function(){
     try{ localStorage.setItem("cuadrante_hide_done", this.checked ? "1" : "0"); }catch(e){}
