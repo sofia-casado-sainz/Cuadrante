@@ -413,11 +413,22 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
   var PALETTE = ["#24566A","#A8792E","#6E7B4A","#A6402E","#4C6E8C","#7A5C3E","#5C7A63","#8C5A6E","#3E6E5C"];
 
   var customColors = {};
+  // Compara nombres de asignatura "a lo bruto": en minúsculas y sin el grupo del final
+  // (p. ej. "Internet of Things(A)" de Canvas y "Internet of Things" del Horario deben
+  // contar como la misma asignatura, aunque el texto exacto no coincida letra a letra).
+  function normalizeSubject(name){
+    return String(name||"").toLowerCase().replace(/\([^)]*\)\s*$/,"").trim();
+  }
   function colorFor(name){
     if(!name) return "#8B948A";
-    if(customColors[name]) return customColors[name];
-    var idx = SUBJECTS.indexOf(name);
-    if(idx === -1){ var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; } idx=h%PALETTE.length; }
+    if(customColors[name]) return customColors[name]; // coincidencia exacta (como se guardaba antes)
+    var norm = normalizeSubject(name);
+    for(var key in customColors){
+      if(normalizeSubject(key) === norm) return customColors[key];
+    }
+    var idx = -1;
+    for(var i=0;i<SUBJECTS.length;i++){ if(normalizeSubject(SUBJECTS[i])===norm){ idx=i; break; } }
+    if(idx === -1){ var h=0; for(var j=0;j<name.length;j++){ h=(h*31+name.charCodeAt(j))>>>0; } idx=h%PALETTE.length; }
     return PALETTE[idx % PALETTE.length];
   }
   function saveColor(subject, hex){
