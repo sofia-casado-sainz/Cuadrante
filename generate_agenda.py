@@ -130,9 +130,8 @@ def send_push(user_ref, title, body, url):
                 print(f"Aviso: no se pudo mandar push a {sdoc.id}: {e}", file=sys.stderr)
 
 
-def procesa_usuario(user_doc, hoy):
-    user_ref = user_doc.reference
-    email = user_doc.id
+def procesa_usuario(user_ref, hoy):
+    email = user_ref.id
     agenda_coll = user_ref.collection("agenda")
 
     # --- 1. Tareas activas (no hechas, con fecha, dentro del horizonte) ---
@@ -209,11 +208,27 @@ def main():
 
     hoy = datetime.now(MADRID).date()
 
-    for user_doc in db.collection("users").stream():
+    # OJO: no usamos db.collection("users").stream() porque en Firestore el
+    # documento users/{email} nunca se crea "de verdad" (solo se escriben sus
+    # subcolecciones tasks/avisos/meta/...), y un documento así de "fantasma"
+    # no aparece al listar la colección users/. En su lugar, recorremos la
+    # colección tasks de TODOS los usuarios de golpe (collection_group) y
+    # sacamos de ahí quién tiene datos. Esta consulta, al no llevar where()
+    # ni order_by(), no necesita ningún índice especial de Firestore.
+    usuarios = {}
+    for task_doc in db.collection_group("tasks").stream():
+        user_ref = task_doc.reference.parent.parent  # .../users/{email}/tasks/{id} -> users/{email}
+        if user_ref is not None:
+            usuarios[user_ref.path] = user_ref
+
+    if not usuarios:
+        print("No se encontró ningún usuario con tareas todavía (¿ya se sincronizó Canvas/Blackboard al menos una vez?).")
+
+    for user_ref in usuarios.values():
         try:
-            procesa_usuario(user_doc, hoy)
+            procesa_usuario(user_ref, hoy)
         except Exception as e:
-            print(f"[{user_doc.id}] Error procesando su Agenda: {e}", file=sys.stderr)
+            print(f"[{user_ref.id}] Error procesando su Agenda: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

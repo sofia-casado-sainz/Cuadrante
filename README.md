@@ -1,23 +1,28 @@
 # Cuadrante (versión independiente)
 
-App de tareas y avisos de Canvas que corre sola, gratis, sin depender de ninguna
-suscripción de Claude. Se sincroniza cada 4 horas mediante un robot de GitHub
-(GitHub Actions) y guarda los datos en una base de datos gratuita (Firebase).
+App de tareas, avisos y agenda diaria de Canvas/Blackboard que corre sola, gratis,
+sin depender de ninguna suscripción de Claude. Se sincroniza cada 4 horas (Canvas)
+o cada hora (Blackboard) mediante robots de GitHub (GitHub Actions), guarda los
+datos en una base de datos gratuita (Firebase), y usa opcionalmente la capa
+gratuita de **Google Gemini** para dos piezas con IA: la Agenda diaria y el
+catálogo de retos de hábitos saludables.
 
 ## Qué vas a crear (todo gratis)
 
-1. Un proyecto de **Firebase** → guarda tus tareas/avisos y controla quién entra.
+1. Un proyecto de **Firebase** → guarda tus tareas/avisos/agenda y controla quién entra.
 2. Un repositorio de **GitHub** → aloja la web y ejecuta la sincronización sola.
 3. La web publicada con **GitHub Pages** → el enlace que abres en el móvil.
+4. (Opcional) Una clave de **Google Gemini** → para la Agenda y el catálogo de retos.
 
 ## Paso 1 — Crear el proyecto Firebase
 
 1. Ve a [console.firebase.google.com](https://console.firebase.google.com) → **Crear un proyecto** (dale el nombre que quieras, ej. "cuadrante").
 2. En el menú de la izquierda, entra en **Firestore Database** → **Crear base de datos** → modo producción → la ubicación te da igual (elige `eur3` si quieres que esté en Europa).
 3. Cuando esté creada, ve a la pestaña **Reglas** y pega el contenido del archivo `firestore.rules` de esta carpeta, sustituyendo lo que haya. Pulsa **Publicar**.
-4. En el menú de la izquierda, entra en **Authentication** → **Comenzar** → pestaña **Sign-in method** → activa **Google**.
-5. Ve al icono de engranaje (arriba a la izquierda) → **Configuración del proyecto** → baja hasta "Tus apps" → pulsa el icono `</>` (web) → dale un nombre → **Registrar app**. Te muestra un bloque `firebaseConfig = {...}` — copia esos valores.
-6. Abre `index.html` de esta carpeta, busca `const firebaseConfig = {` (cerca de la línea 260) y sustituye los valores `"TU_..."` por los que acabas de copiar. Guarda.
+4. En el menú de la izquierda, entra en **Authentication** → **Comenzar** → pestaña **Sign-in method** → activa el proveedor **Correo electrónico/contraseña** (no "Google": la app usa email + contraseña propios, no el inicio de sesión de Google).
+5. Ve a la pestaña **Users** (Usuarios) → **Add user** → escribe tu email (ej. de la UFV) y la contraseña con la que quieras entrar en la app. Esta es la cuenta que usas para iniciar sesión en Cuadrante — no tiene por qué coincidir con ninguna contraseña real de tu universidad.
+6. Ve al icono de engranaje (arriba a la izquierda) → **Configuración del proyecto** → baja hasta "Tus apps" → pulsa el icono `</>` (web) → dale un nombre → **Registrar app**. Te muestra un bloque `firebaseConfig = {...}` — copia esos valores.
+7. Abre `index.html` de esta carpeta, busca `const firebaseConfig = {` (cerca de la línea 350) y sustituye los valores `"TU_..."` por los que acabas de copiar. Guarda.
 
 ## Paso 2 — Clave para que el robot pueda escribir
 
@@ -51,7 +56,7 @@ En el repositorio → **Settings** → **Secrets and variables** → **Actions**
 
 ## Paso 7 — Instalarla en el móvil
 
-Abre el enlace de GitHub Pages en tu teléfono, inicia sesión con tu cuenta de Google de la UFV, y usa "Añadir a pantalla de inicio". A partir de ahí se actualiza sola cada 4 horas, sin que tengas que abrir nada ni depender de Claude.
+Abre el enlace de GitHub Pages en tu teléfono, inicia sesión con el email y la contraseña que creaste en el Paso 1.5, y usa "Añadir a pantalla de inicio". A partir de ahí se actualiza sola cada 4 horas, sin que tengas que abrir nada ni depender de Claude.
 
 ## Novedad — Pestaña "Agenda" (agente diario) + arreglo importante
 
