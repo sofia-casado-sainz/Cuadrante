@@ -226,10 +226,6 @@
   </section>
 
   <section class="view" id="view-tareas">
-    <div class="banner" id="install-banner">
-      <span class="close" id="install-close">&times;</span>
-      📱 <b>Para tenerla en el móvil:</b> abre este enlace en Safari o Chrome de tu teléfono y usa "Compartir → Añadir a pantalla de inicio" (iPhone) o el menú "⋮ → Añadir a pantalla de inicio" (Android).
-    </div>
     <div class="panel">
       <div class="panel-head">
         <h2>Tareas</h2>
@@ -534,16 +530,11 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
 
   // ---------- Preferencias que se recuerdan solas (no hace falta repetirlas cada vez) ----------
   try{
-    if(localStorage.getItem("cuadrante_install_dismissed")==="1"){ document.getElementById("install-banner").style.display="none"; }
     if(localStorage.getItem("cuadrante_hide_done")==="1"){ document.getElementById("hide-done").checked = true; }
     if(localStorage.getItem("cuadrante_hide_read")==="1"){ document.getElementById("hide-read").checked = true; }
     var lastTab = localStorage.getItem("cuadrante_last_tab");
     if(lastTab && document.getElementById("view-"+lastTab)) activateTab(lastTab);
   }catch(e){}
-  document.getElementById("install-close").addEventListener("click", function(){
-    document.getElementById("install-banner").style.display="none";
-    try{ localStorage.setItem("cuadrante_install_dismissed","1"); }catch(e){}
-  });
 
   var started = false;
   var tasksCache = [], schedCache = [], avisosCache = [];
