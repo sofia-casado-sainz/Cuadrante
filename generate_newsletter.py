@@ -26,6 +26,7 @@ Variables de entorno necesarias:
 import os
 import sys
 import json
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -35,6 +36,25 @@ from firebase_admin import credentials, firestore
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+
+
+def llamar_gemini(body, intentos=3):
+    """POST a Gemini con reintentos: a veces tarda más de la cuenta o hay un
+    corte de red pasajero entre el runner de GitHub Actions y la API de
+    Google, y no merece la pena que falle el robot entero por eso."""
+    ultimo_error = None
+    for intento in range(1, intentos + 1):
+        try:
+            resp = requests.post(GEMINI_URL, params={"key": GEMINI_API_KEY}, json=body, timeout=120)
+            resp.raise_for_status()
+            return resp.json()
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            ultimo_error = e
+            if intento < intentos:
+                espera = 10 * intento
+                print(f"Intento {intento}/{intentos} falló ({e}); reintento en {espera}s…", file=sys.stderr)
+                time.sleep(espera)
+    raise ultimo_error
 
 
 def pedir_newsletter_a_gemini():
@@ -87,9 +107,7 @@ que sean estables en el tiempo, y sé honesto/genérico antes que inventar."""
             "temperature": 0.9,
         },
     }
-    resp = requests.post(GEMINI_URL, params={"key": GEMINI_API_KEY}, json=body, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
+    data = llamar_gemini(body)
     try:
         texto_json = data["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
@@ -118,6 +136,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except requests.HTTPError as e:
+    except (requests.exceptions.RequestException, RuntimeError) as e:
         print(f"Error llamando a la API de Gemini: {e}", file=sys.stderr)
         sys.exit(1)
