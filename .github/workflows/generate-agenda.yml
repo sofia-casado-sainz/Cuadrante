@@ -1,0 +1,25 @@
+name: Generar Agenda (IA, diario)
+
+on:
+  schedule:
+    # Cada mañana a las 6:00 UTC (7-8h en España según la época del año),
+    # para que el plan del día esté listo antes de que te despiertes.
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}  # te deja lanzarlo a mano desde la pestaña "Actions" de GitHub
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: pip install "setuptools<69" requests firebase-admin pywebpush
+      - name: Generar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: python generate_agenda.py

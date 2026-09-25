@@ -6,9 +6,7 @@
 <title>Cuadrante</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2324566A'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='white' font-family='Georgia,serif'%3EC%3C/text%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2324566A'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='white' font-family='Georgia,serif'%3EC%3C/text%3E%3C/svg%3E">
-<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#24566A">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -43,8 +41,8 @@
   a{ color:var(--accent); }
 
   header.top{
-    position:relative; background:var(--bg);
-    padding:calc(18px + env(safe-area-inset-top,0px)) 0 10px 0; z-index:20; border-bottom:1px solid var(--border); margin-bottom:16px;
+    position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
+    padding:18px 0 10px 0; z-index:20; border-bottom:1px solid var(--border); margin-bottom:16px;
   }
   .brand{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .brand h1{ font-size:26px; font-weight:600; letter-spacing:-0.01em; }
@@ -139,7 +137,7 @@
   .sched-form select, .sched-form input{ font-family:inherit; font-size:13px; padding:8px 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%; }
   .sched-form label{ font-size:11px; color:var(--ink-faint); display:block; margin-bottom:3px; }
   .sched-form .full{ grid-column:1 / -1; }
-  .sched-days{ display:flex; flex-wrap:wrap; gap:4px 14px; }  .sched-list{ margin-top:14px; }
+  .sched-list{ margin-top:14px; }
   .sched-item{ display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .sched-item:last-child{ border:none; }
 
@@ -154,12 +152,12 @@
   .mark-read{ flex:none; }
 
   .sync-note{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; }
-  .banner{ background:var(--accent-tint); border:1px solid var(--accent); border-radius:11px; padding:11px 13px; font-size:12.5px; color:var(--ink); margin-bottom:14px; line-height:1.5; position:relative; z-index:25; }
+  .banner{ background:var(--accent-tint); border:1px solid var(--accent); border-radius:11px; padding:11px 13px; font-size:12.5px; color:var(--ink); margin-bottom:14px; line-height:1.5; }
   .banner b{ color:var(--accent-ink); }
   .banner .close{ float:right; cursor:pointer; color:var(--ink-faint); font-size:15px; margin-left:8px; }
   .skeleton{ height:14px; background:var(--surface-2); border-radius:5px; margin:8px 0; animation:pulse 1.4s ease-in-out infinite; }
   @keyframes pulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
-  
+
   #err-toast{ position:fixed; left:16px; right:16px; bottom:calc(16px + env(safe-area-inset-bottom,0px)); max-width:520px; margin:0 auto; background:var(--surface); border:1px solid var(--red); color:var(--red); border-radius:11px; padding:11px 14px; font-size:12.5px; line-height:1.5; box-shadow:0 4px 18px rgba(0,0,0,.18); z-index:50; display:none; }
   #err-toast b{ display:block; margin-bottom:2px; }
   #err-toast .close{ float:right; cursor:pointer; margin-left:10px; }
@@ -181,9 +179,9 @@
 
 <div id="gate">
   <h1>Cuadrante</h1>
-  <p>Tu panel personal de tareas y avisos. Inicia sesión para ver los tuyos.</p>
+  <p>Tu panel personal de Canvas. Inicia sesión para ver tus tareas y avisos.</p>
   <form id="login-form" style="display:flex;flex-direction:column;gap:8px;max-width:280px;margin:0 auto;">
-    <input id="login-email" type="email" placeholder="tu email" required>
+    <input id="login-email" type="email" value="9206029@alumnos.ufv.es" required>
     <input id="login-password" type="password" placeholder="Contraseña" required>
     <button class="btn primary" type="submit">Entrar</button>
   </form>
@@ -193,21 +191,42 @@
 <div id="app">
 <header class="top">
   <div class="brand">
-    <div><h1>Cuadrante</h1><span class="sub mono" id="brand-sub">UFV · curso 26/27</span></div>
+    <div><h1>Cuadrante</h1><span class="sub mono">UFV · curso 26/27</span></div>
     <button id="signout">Cerrar sesión</button>
   </div>
   <nav class="tabs">
-    <button data-tab="tareas" class="active">Tareas</button>
+    <button data-tab="agenda" class="active">Agenda</button>
+    <button data-tab="tareas">Tareas</button>
     <button data-tab="avisos">Avisos</button>
     <button data-tab="calendario">Calendario</button>
     <button data-tab="horario">Horario</button>
-    <button data-tab="reto">Reto</button>
+    <button data-tab="mas">Más</button>
   </nav>
 </header>
 
 <main>
 
-  <section class="view active" id="view-tareas">
+  <section class="view active" id="view-agenda">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Agenda</h2>
+        <span class="muted mono" id="agenda-date"></span>
+      </div>
+      <div class="muted" style="line-height:1.5;margin-bottom:4px;">Cada mañana un agente repasa tus tareas y te dice qué ir haciendo. Lo que no termines se queda aquí hasta que venza.</div>
+      <div id="agenda-list"><div class="skeleton" style="width:70%"></div><div class="skeleton" style="width:50%"></div></div>
+      <form class="add-task" id="add-agenda-form">
+        <input type="text" id="new-agenda-text" placeholder="Añadir algo tuyo para hoy…" required>
+        <input type="date" id="new-agenda-date" title="Fecha límite (opcional)">
+        <button class="btn" type="submit">Añadir</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="view" id="view-tareas">
+    <div class="banner" id="install-banner">
+      <span class="close" id="install-close">&times;</span>
+      📱 <b>Para tenerla en el móvil:</b> abre este enlace en Safari o Chrome de tu teléfono y usa "Compartir → Añadir a pantalla de inicio" (iPhone) o el menú "⋮ → Añadir a pantalla de inicio" (Android).
+    </div>
     <div class="panel">
       <div class="panel-head">
         <h2>Tareas</h2>
@@ -265,11 +284,7 @@
             <select id="edit-sched-subject"></select>
             <input type="text" id="edit-sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div class="full">
-            <label class="checkline"><input type="checkbox" id="edit-sched-oneoff"> Solo esta semana (no se repite)</label>
-          </div>
-          <div id="edit-sched-day-wrap"><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
-          <div id="edit-sched-date-wrap" style="display:none;"><label>Fecha</label><input type="date" id="edit-sched-date"></div>
+          <div><label>Día</label><select id="edit-sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
           <div><label>Aula (opcional)</label><input type="text" id="edit-sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="edit-sched-start"></div>
           <div><label>Hora fin</label><input type="time" id="edit-sched-end"></div>
@@ -290,25 +305,7 @@
             <select id="sched-subject"></select>
             <input type="text" id="sched-subject-other" placeholder="Nombre de la asignatura" style="display:none;margin-top:6px;">
           </div>
-          <div class="full">
-            <label class="checkline"><input type="checkbox" id="sched-oneoff"> Solo esta semana (no se repite)</label>
-          </div>
-          <div class="full" id="sched-days-wrap">
-            <label>Días (elige uno o varios)</label>
-            <div class="sched-days">
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Lunes"> Lunes</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Martes"> Martes</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Miércoles"> Miércoles</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Jueves"> Jueves</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Viernes"> Viernes</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Sábado"> Sábado</label>
-              <label class="checkline"><input type="checkbox" class="sched-day-check" value="Domingo"> Domingo</label>
-            </div>
-          </div>
-          <div class="full" id="sched-date-wrap" style="display:none;">
-            <label>Fecha</label>
-            <input type="date" id="sched-date">
-          </div>
+          <div><label>Día</label><select id="sched-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option><option>Domingo</option></select></div>
           <div><label>Aula (opcional)</label><input type="text" id="sched-room" placeholder="Ej. A-204"></div>
           <div><label>Hora inicio</label><input type="time" id="sched-start" value="09:00"></div>
           <div><label>Hora fin</label><input type="time" id="sched-end" value="10:30"></div>
@@ -320,21 +317,14 @@
     </div>
   </section>
 
-  <section class="view" id="view-reto">
+  <section class="view" id="view-mas">
     <div class="panel">
-      <div class="panel-head"><h2>Tu rendimiento</h2></div>
-      <div id="perf-stats"><div class="skeleton" style="width:70%"></div></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Reto de hoy</h2></div>
-      <div class="muted" style="margin-bottom:10px;" id="reto-challenge-text">Cargando…</div>
-      <button class="btn primary" type="button" id="reto-mark-btn">Marcar como cumplido hoy</button>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>Competición</h2></div>
-      <div id="reto-compare"></div>
+      <div class="panel-head"><h2>Más</h2></div>
+      <div class="muted" style="margin-bottom:10px;">Newsletter semanal y sugerencias de cursos: estas dos viven en tu panel de Claude, porque se generan con IA.</div>
+      <a class="more-card" href="https://claude.ai/artifact/8MtYBJJA2hKbA2u4EW12ak" target="_blank" rel="noopener">
+        <div class="t">Newsletter y Cursos ↗</div>
+        <div class="d">Abre el panel de Claude para ver la newsletter de los lunes y las sugerencias de certificaciones.</div>
+      </a>
     </div>
   </section>
 
@@ -363,7 +353,8 @@ const firebaseConfig = {
   messagingSenderId: "865869614711",
   appId: "1:865869614711:web:9b77b3c66f1078598fc072"
 };
-
+// Solo esta cuenta puede iniciar sesión (se comprueba también en las reglas de Firestore):
+const ALLOWED_EMAIL = "9206029@alumnos.ufv.es";
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -375,35 +366,25 @@ const db = getFirestore(app);
 (function(){
   "use strict";
 
+  var SUBJECTS = [
+    "Aprendizaje estadístico y data mining","Computación de alto rendimiento","Emprendimiento e innovación",
+    "Internet of Things","Ingeniería del Software II","La cuestión de Dios",
+    "Planificación y gestión de proyectos informáticos","Roboética en el cuidado de la salud","Seguridad"
+  ];
   var PALETTE = ["#24566A","#A8792E","#6E7B4A","#A6402E","#4C6E8C","#7A5C3E","#5C7A63","#8C5A6E","#3E6E5C"];
 
-    var customColors = {};
+  var customColors = {};
   function colorFor(name){
     if(!name) return "#8B948A";
     if(customColors[name]) return customColors[name];
-    var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; }
-    return PALETTE[h % PALETTE.length];
-  }
-  function knownSubjects(){
-    var set = {};
-    tasksCache.forEach(function(t){ if(t.course) set[t.course] = true; });
-    schedCache.forEach(function(b){ if(b.subject) set[b.subject] = true; });
-    return Object.keys(set).sort(function(a,b){ return a.localeCompare(b, "es"); });
-  }
-  function populateSubjectSelect(selectEl){
-    if(!selectEl) return;
-    var current = selectEl.value;
-    var subjects = knownSubjects();
-    var html = "";
-    subjects.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
-    html += '<option value="__other__">Otra…</option>';
-    selectEl.innerHTML = html;
-    if(current && (subjects.indexOf(current) !== -1 || current === "__other__")){ selectEl.value = current; }
+    var idx = SUBJECTS.indexOf(name);
+    if(idx === -1){ var h=0; for(var i=0;i<name.length;i++){ h=(h*31+name.charCodeAt(i))>>>0; } idx=h%PALETTE.length; }
+    return PALETTE[idx % PALETTE.length];
   }
   function saveColor(subject, hex){
     if(!subject) return;
     var patch = {}; patch[subject] = hex;
-    setDoc(uDoc("settings","colors"), patch, {merge:true}).catch(showError);
+    setDoc(doc(db,"users",ALLOWED_EMAIL,"settings","colors"), patch, {merge:true}).catch(showError);
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
@@ -427,40 +408,18 @@ const db = getFirestore(app);
   });
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
 
-var currentUserEmail = null;
-var isUAH = false;
-function uDoc(){ return doc.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
-function uColl(){ return collection.apply(null, [db,"users",currentUserEmail].concat(Array.prototype.slice.call(arguments))); }
-
-onAuthStateChanged(auth, function(user){
-    if(user){
-      currentUserEmail = user.email;
-      isUAH = user.email.indexOf("uah.es") !== -1;
+  onAuthStateChanged(auth, function(user){
+    if(user && user.email === ALLOWED_EMAIL){
       document.getElementById("gate").style.display = "none";
       document.getElementById("app").style.display = "block";
-      var sub = document.getElementById("brand-sub");
-      if(sub){
-        var uni = isUAH ? "UAH" : "UFV";
-        sub.textContent = uni + " · curso 26/27";
-      }
-      var avisosTabBtn = document.querySelector('nav.tabs button[data-tab="avisos"]');
-      if(avisosTabBtn){
-        avisosTabBtn.hidden = isUAH;
-        if(isUAH && avisosTabBtn.classList.contains("active")){
-          activateTab("tareas");
-          try{ localStorage.setItem("cuadrante_last_tab", "tareas"); }catch(e){}
-        }
-      }
-      try{
-        if(isUAH && localStorage.getItem("cuadrante_last_tab") === "avisos"){
-          localStorage.setItem("cuadrante_last_tab", "tareas");
-        }
-      }catch(e){}
       startApp();
     } else {
-      currentUserEmail = null;
       document.getElementById("app").style.display = "none";
       document.getElementById("gate").style.display = "flex";
+      if(user && user.email !== ALLOWED_EMAIL){
+        document.getElementById("gate-error").textContent = "Esta app es solo para " + ALLOWED_EMAIL;
+        signOut(auth);
+      }
     }
   });
 
@@ -470,7 +429,6 @@ onAuthStateChanged(auth, function(user){
   function activateTab(name){
     tabs.forEach(function(b){ b.classList.toggle("active", b.dataset.tab===name); });
     views.forEach(function(v){ v.classList.toggle("active", v.id==="view-"+name); });
-    window.scrollTo(0, 0);
   }
   tabs.forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -479,42 +437,18 @@ onAuthStateChanged(auth, function(user){
     });
   });
 
-  // ---------- Cambiar de pestaña deslizando el dedo (desde cualquier parte) ----------
-  (function(){
-    var startX = 0, startY = 0, startTime = 0;
-    document.addEventListener("touchstart", function(e){
-      if(e.touches.length !== 1) return;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      startTime = Date.now();
-    }, { passive: true });
-    document.addEventListener("touchend", function(e){
-      if(e.changedTouches.length !== 1) return;
-      if(e.target.closest(".horario-wrap") || e.target.closest("nav.tabs")) return;
-      var dx = e.changedTouches[0].clientX - startX;
-      var dy = e.changedTouches[0].clientY - startY;
-      if(Date.now() - startTime > 600) return;
-      if(Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-      var names = Array.prototype.filter.call(tabs, function(b){ return !b.hidden; }).map(function(b){ return b.dataset.tab; });
-      var activeBtn = document.querySelector("nav.tabs button.active");
-      var idx = names.indexOf(activeBtn ? activeBtn.dataset.tab : names[0]);
-      var next = dx < 0 ? idx + 1 : idx - 1;
-      if(next < 0 || next >= names.length) return;
-      activateTab(names[next]);
-      try{ localStorage.setItem("cuadrante_last_tab", names[next]); }catch(e){}
-    }, { passive: true });
-  })();
-
-  // Empieza siempre arriba del todo, para que el aviso no se quede tapado debajo del menú
-  window.scrollTo(0, 0);
-
   // ---------- Preferencias que se recuerdan solas (no hace falta repetirlas cada vez) ----------
   try{
+    if(localStorage.getItem("cuadrante_install_dismissed")==="1"){ document.getElementById("install-banner").style.display="none"; }
     if(localStorage.getItem("cuadrante_hide_done")==="1"){ document.getElementById("hide-done").checked = true; }
     if(localStorage.getItem("cuadrante_hide_read")==="1"){ document.getElementById("hide-read").checked = true; }
     var lastTab = localStorage.getItem("cuadrante_last_tab");
     if(lastTab && document.getElementById("view-"+lastTab)) activateTab(lastTab);
   }catch(e){}
+  document.getElementById("install-close").addEventListener("click", function(){
+    document.getElementById("install-banner").style.display="none";
+    try{ localStorage.setItem("cuadrante_install_dismissed","1"); }catch(e){}
+  });
 
   var started = false;
   var tasksCache = [], schedCache = [], avisosCache = [];
@@ -541,32 +475,35 @@ onAuthStateChanged(auth, function(user){
 
   function startApp(){
     if(started) return; started = true;
-    subscribeMeta(); subscribeTasks(); subscribeSchedule(); subscribeColors(); subscribeRetos();
-    if(!isUAH){ subscribeAvisos(); }
+    subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors(); subscribeAgenda();
     renderCalendar();
   }
+
   function subscribeColors(){
-    onSnapshot(uDoc("settings","colors"), function(snap){
+    onSnapshot(doc(db,"users",ALLOWED_EMAIL,"settings","colors"), function(snap){
       customColors = snap.exists() ? (snap.data()||{}) : {};
       renderTasks(); renderAvisos(); renderCalendar(); renderHorario();
     }, function(){});
   }
 
   function subscribeMeta(){
-    onSnapshot(uDoc("meta","sync"), function(snap){
+    onSnapshot(doc(db,"users",ALLOWED_EMAIL,"meta","sync"), function(snap){
       var data = snap.exists() ? snap.data() : {};
       document.getElementById("tasks-sync-note").textContent = fmtSync(data.tasks_last_sync, "fechas de entrega");
       document.getElementById("avisos-sync-note").textContent = fmtSync(data.avisos_last_sync, "avisos");
-    }, function(){});
+    }, function(err){
+      document.getElementById("tasks-sync-note").innerHTML = '<span style="color:red">ERROR: ' + esc(err.message) + '</span>';
+      document.getElementById("avisos-sync-note").innerHTML = '<span style="color:red">ERROR: ' + esc(err.message) + '</span>';
+    });
   }
 
   // ---------- AVISOS ----------
   function subscribeAvisos(){
-    var q = query(uColl("avisos"), orderBy("posted_at","desc"), limit(200));
+    var q = query(collection(db,"users",ALLOWED_EMAIL,"avisos"), orderBy("posted_at","desc"), limit(200));
     onSnapshot(q, function(qs){
       avisosCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; avisosCache.push(o); });
       renderAvisos();
-    }, function(){});
+    }, function(err){ document.getElementById("avisos-list").innerHTML = '<div style="color:red">ERROR: ' + esc(err.message) + '</div>'; });
   }
   document.getElementById("hide-read").addEventListener("change", function(){
     try{ localStorage.setItem("cuadrante_hide_read", this.checked ? "1" : "0"); }catch(e){}
@@ -583,7 +520,7 @@ onAuthStateChanged(auth, function(user){
     }
     box.innerHTML = items.map(avisoCard).join("");
     box.querySelectorAll("input[type=checkbox][data-avid]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(uDoc("avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
     });
   }
   function avisoCard(a){
@@ -601,10 +538,10 @@ onAuthStateChanged(auth, function(user){
 
   // ---------- TAREAS ----------
   function subscribeTasks(){
-    var q = query(uColl("tasks"), orderBy("due_at","asc"), limit(500));
+    var q = query(collection(db,"users",ALLOWED_EMAIL,"tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
-      renderTasks(); renderCalendar(); renderTaskPerformance();
+      renderTasks(); renderCalendar(); renderAgenda();
     }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
   }
   document.getElementById("hide-done").addEventListener("change", function(){
@@ -635,7 +572,7 @@ onAuthStateChanged(auth, function(user){
     if(!any){ html = '<div class="empty-state"><div class="big">✅</div>'+(tasksCache.length?"No hay tareas pendientes con estos filtros.":"No hay tareas todavía.")+'</div>'; }
     list.innerHTML = html;
     list.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(uDoc("tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
     list.querySelectorAll(".pill.editable").forEach(function(p){ p.addEventListener("click", function(){ toggleCourseEditor(p); }); });
   }
@@ -660,13 +597,13 @@ onAuthStateChanged(auth, function(user){
     var ed = row.querySelector(".course-editor");
     if(ed.style.display !== "none"){ ed.style.display="none"; ed.innerHTML=""; return; }
     var sel = '<select><option value="">Sin asignatura</option>';
-    knownSubjects().forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    SUBJECTS.forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
     sel += '</select> <button class="btn small">Guardar</button>';
     ed.innerHTML = sel; ed.style.display = "flex";
     var task = tasksCache.find(function(t){ return t.id===id; });
     if(task && task.course) ed.querySelector("select").value = task.course;
     ed.querySelector("button").addEventListener("click", function(){
-      updateDoc(uDoc("tasks",id), {course: ed.querySelector("select").value}).catch(showError);
+      updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",id), {course: ed.querySelector("select").value}).catch(showError);
       ed.style.display="none";
     });
   }
@@ -676,8 +613,100 @@ onAuthStateChanged(auth, function(user){
     var titleEl = document.getElementById("new-task-title"), dateEl = document.getElementById("new-task-date");
     var title = titleEl.value.trim(); if(!title) return;
     var due_at = dateEl.value ? new Date(dateEl.value+"T23:59:00").toISOString() : null;
-    addDoc(uColl("tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
+    addDoc(collection(db,"users",ALLOWED_EMAIL,"tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
       .then(function(){ titleEl.value=""; dateEl.value=""; }).catch(showError);
+  });
+
+  // ---------- AGENDA ----------
+  var agendaCache = [];
+  function todayKey(){ var t=startOfDay(new Date()); return t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate()); }
+
+  function subscribeAgenda(){
+    onSnapshot(collection(db,"users",ALLOWED_EMAIL,"agenda"), function(qs){
+      agendaCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; agendaCache.push(o); });
+      renderAgenda();
+    }, function(err){ document.getElementById("agenda-list").innerHTML = '<div style="color:red">ERROR: ' + esc(err.message) + '</div>'; });
+  }
+
+  function parseKey(key){ var p = key.split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+
+  function venceLabel(vencimiento, today){
+    if(!vencimiento) return "";
+    var diff = daysBetween(today, parseKey(vencimiento));
+    if(diff < 0) return "vencido hace " + (-diff) + " día" + (diff===-1?"":"s");
+    if(diff === 0) return "vence hoy";
+    if(diff === 1) return "vence mañana";
+    return "quedan " + diff + " días";
+  }
+
+  function renderAgenda(){
+    var box = document.getElementById("agenda-list");
+    var today = startOfDay(new Date());
+    var tKey = todayKey();
+    document.getElementById("agenda-date").textContent = fmtDateLabel(today);
+
+    var visibles = agendaCache.filter(function(a){
+      if(a.tipo === "tarea"){
+        var task = tasksCache.find(function(t){ return t.id === a.task_id; });
+        if(!task || task.done) return false; // la tarea real ya está hecha (o ya no existe): fuera de la Agenda
+      }
+      if(a.done) return a.hecho_el === tKey; // lo marcado hoy se ve tachado; lo de otros días no vuelve a salir
+      if(!a.dia || a.dia > tKey) return false;
+      if(a.vencimiento && a.vencimiento < tKey) return false; // ya pasó su fecha límite sin marcarse
+      return true;
+    });
+
+    visibles.sort(function(a,b){
+      if(!!a.done !== !!b.done) return a.done ? 1 : -1;
+      var va = a.vencimiento || "9999-12-31", vb = b.vencimiento || "9999-12-31";
+      if(va !== vb) return va < vb ? -1 : 1;
+      return (a.creado||"") < (b.creado||"") ? -1 : 1;
+    });
+
+    if(!visibles.length){
+      box.innerHTML = '<div class="empty-state"><div class="big">🌤️</div>Nada pendiente en tu Agenda de hoy.</div>';
+      return;
+    }
+
+    box.innerHTML = visibles.map(function(a){
+      var etiqueta = a.tipo === "tarea" ? "📚 Tarea" : "📝 Tuyo";
+      var vLabel = venceLabel(a.vencimiento, today);
+      var vClass = "";
+      if(a.vencimiento){ var diff = daysBetween(today, parseKey(a.vencimiento)); vClass = diff < 0 ? "urgent" : (diff <= 1 ? "soon" : ""); }
+      return '<div class="task-row '+(a.done?"done":"")+'" data-agid="'+esc(a.id)+'">'
+        + '<input type="checkbox" data-agid="'+esc(a.id)+'" data-tipo="'+esc(a.tipo)+'" '+(a.done?"checked":"")+'>'
+        + '<div class="task-main"><div class="task-title">'+esc(a.texto||"")+'</div>'
+        + '<div class="task-meta"><span class="pill" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);">'+etiqueta+'</span>'
+        + (vLabel?'<span class="due '+vClass+'">'+esc(vLabel)+'</span>':'')
+        + (a.tipo==="personal" ? '<button class="btn ghost small" data-del="'+esc(a.id)+'" type="button" title="Eliminar">🗑</button>' : '')
+        + '</div></div></div>';
+    }).join("");
+
+    box.querySelectorAll("input[type=checkbox][data-agid]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        var item = agendaCache.find(function(a){ return a.id === cb.dataset.agid; });
+        var patch = {done: cb.checked};
+        if(cb.checked) patch.hecho_el = todayKey();
+        updateDoc(doc(db,"users",ALLOWED_EMAIL,"agenda",cb.dataset.agid), patch).catch(showError);
+        if(cb.dataset.tipo === "tarea" && item && item.task_id){
+          updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",item.task_id), {done: cb.checked}).catch(showError);
+        }
+      });
+    });
+    box.querySelectorAll("[data-del]").forEach(function(btn){
+      btn.addEventListener("click", function(){ deleteDoc(doc(db,"users",ALLOWED_EMAIL,"agenda",btn.dataset.del)).catch(showError); });
+    });
+  }
+
+  document.getElementById("add-agenda-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var textEl = document.getElementById("new-agenda-text"), dateEl = document.getElementById("new-agenda-date");
+    var texto = textEl.value.trim(); if(!texto) return;
+    addDoc(collection(db,"users",ALLOWED_EMAIL,"agenda"), {
+      texto: texto, dia: todayKey(), done: false, tipo: "personal",
+      vencimiento: dateEl.value || null, fuente: "manual",
+      creado: new Date().toISOString()
+    }).then(function(){ textEl.value=""; dateEl.value=""; }).catch(showError);
   });
 
   // ---------- CALENDARIO ----------
@@ -736,144 +765,11 @@ onAuthStateChanged(auth, function(user){
     items.forEach(function(t){ html += taskRow(t, bucketOf(t, startOfDay(new Date()))); });
     box.innerHTML = html;
     box.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(uDoc("tasks",cb.dataset.id), {done: cb.checked}).catch(function(){}); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
   }
 
-    // ---------- RETO DIARIO Y COMPETICIÓN ----------
-  var UFV_EMAIL = "9206029@alumnos.ufv.es";
-  var UAH_EMAIL = "ana.ecenarro@edu.uah.es";
-  function otherUserEmail(){ return isUAH ? UFV_EMAIL : UAH_EMAIL; }
-  function otherUserLabel(){ return isUAH ? "Sofía (UFV)" : "Ana (UAH)"; }
-
-  var DAILY_CHALLENGES = [
-    "Bebe al menos 1,5 L de agua hoy",
-    "Sal a caminar o muévete al aire libre 15 minutos",
-    "Duerme (o intenta dormir) al menos 7 horas esta noche",
-    "Haz 10 minutos de estiramientos",
-    "Desconecta del móvil 30 minutos antes de dormir",
-    "Haz una pausa de pantallas cada 2 horas de estudio",
-    "Prepara o come algo casero y saludable",
-    "Escribe 3 cosas por las que estés agradecida hoy",
-    "Respira profundo o medita 5 minutos",
-    "Ordena tu espacio de estudio 5 minutos",
-    "Lee 10 páginas de algo que no sea de clase",
-    "Llama o escribe a alguien que quieras",
-    "Tómate 10 minutos de sol o aire libre",
-    "Haz una pequeña rutina de ejercicio (10 min)",
-    "Escribe cómo te sientes hoy, aunque sea una frase",
-    "Termina la ducha con agua fría 20-30 segundos",
-    "Haz algo creativo 10 minutos (dibujar, escribir, música)",
-    "Evita las pantallas la primera media hora tras despertar",
-    "Organiza tu semana en 5 minutos",
-    "Da las gracias a alguien hoy, aunque sea por mensaje"
-  ];
-  function isoDateOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
-  function todayISODate(){ return isoDateOf(new Date()); }
-  function dayOfYear(d){
-    var start = new Date(d.getFullYear(), 0, 0);
-    return Math.floor((d - start) / 86400000);
-  }
-  function todayChallenge(){
-    return DAILY_CHALLENGES[dayOfYear(new Date()) % DAILY_CHALLENGES.length];
-  }
-  function retoDoc(email){ return doc(db, "retos", email); }
-
-  var retoCache = { me: null, other: null };
-
-  function displayStreak(summary){
-    if(!summary || !summary.last_done_date) return 0;
-    var y = new Date(); y.setDate(y.getDate()-1);
-    if(summary.last_done_date === todayISODate() || summary.last_done_date === isoDateOf(y)) return summary.current_streak || 0;
-    return 0;
-  }
-
-  function subscribeRetos(){
-    onSnapshot(retoDoc(currentUserEmail), function(snap){
-      retoCache.me = snap.exists() ? snap.data() : null;
-      renderReto();
-    }, function(){});
-    onSnapshot(retoDoc(otherUserEmail()), function(snap){
-      retoCache.other = snap.exists() ? snap.data() : null;
-      renderReto();
-    }, function(){});
-  }
-
-  function markChallengeDoneToday(){
-    var today = todayISODate();
-    var mine = retoCache.me || {current_streak:0,best_streak:0,last_done_date:null,total_done:0,recent_days:[]};
-    if(mine.last_done_date === today) return;
-    var y = new Date(); y.setDate(y.getDate()-1);
-    var newStreak = (mine.last_done_date === isoDateOf(y)) ? (mine.current_streak||0) + 1 : 1;
-    var newBest = Math.max(mine.best_streak||0, newStreak);
-    var recent = (mine.recent_days||[]).concat([today]);
-    if(recent.length > 60) recent = recent.slice(recent.length-60);
-    setDoc(retoDoc(currentUserEmail), {
-      current_streak: newStreak, best_streak: newBest, last_done_date: today,
-      total_done: (mine.total_done||0) + 1, recent_days: recent
-    }, {merge:true}).catch(showError);
-  }
-
-  function retoStrip(recentDaysArr){
-    var set = {}; (recentDaysArr||[]).forEach(function(d){ set[d]=true; });
-    var html = '<div style="display:flex;gap:3px;flex-wrap:wrap;">';
-    var d = new Date(); d.setDate(d.getDate()-29);
-    for(var i=0;i<30;i++){
-      var key = isoDateOf(d);
-      html += '<div title="'+key+'" style="width:9px;height:9px;border-radius:2px;background:'+(set[key]?"var(--accent)":"var(--surface-2)")+';border:1px solid var(--border);"></div>';
-      d.setDate(d.getDate()+1);
-    }
-    return html + '</div>';
-  }
-
-  function renderReto(){
-    var textBox = document.getElementById("reto-challenge-text");
-    var btn = document.getElementById("reto-mark-btn");
-    if(textBox) textBox.textContent = todayChallenge();
-    if(btn){
-      var doneToday = retoCache.me && retoCache.me.last_done_date === todayISODate();
-      btn.textContent = doneToday ? "✅ Reto cumplido hoy" : "Marcar como cumplido hoy";
-      btn.disabled = !!doneToday;
-    }
-    var box = document.getElementById("reto-compare");
-    if(!box) return;
-    var myStreak = displayStreak(retoCache.me), otherStreak = displayStreak(retoCache.other);
-    var winner = myStreak === otherStreak ? "Vais empatadas" : (myStreak > otherStreak ? "Vas ganando tú 🎉" : otherUserLabel()+" va ganando");
-    box.innerHTML =
-      '<div class="muted" style="margin-bottom:10px;font-weight:600;color:var(--ink);">'+esc(winner)+'</div>' +
-      '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;">' +
-        '<div><div class="mono" style="font-size:22px;font-weight:600;">'+myStreak+'</div><div class="muted" style="font-size:11px;">Tu racha</div></div>' +
-        '<div><div class="mono" style="font-size:22px;font-weight:600;">'+otherStreak+'</div><div class="muted" style="font-size:11px;">Racha de '+esc(otherUserLabel())+'</div></div>' +
-      '</div>' +
-      '<div class="muted" style="font-size:11px;margin-bottom:4px;">Tú (últimos 30 días)</div>' + retoStrip(retoCache.me ? retoCache.me.recent_days : []) +
-      '<div class="muted" style="font-size:11px;margin:10px 0 4px;">'+esc(otherUserLabel())+' (últimos 30 días)</div>' + retoStrip(retoCache.other ? retoCache.other.recent_days : []);
-  }
-  document.getElementById("reto-mark-btn").addEventListener("click", markChallengeDoneToday);
-
-  // ---------- RENDIMIENTO EN TAREAS ----------
-  function statTile(value, label){
-    return '<div style="flex:1;min-width:70px;text-align:center;"><div class="mono" style="font-size:20px;font-weight:600;">'+esc(String(value))+'</div><div class="muted" style="font-size:11px;">'+esc(label)+'</div></div>';
-  }
-  function renderTaskPerformance(){
-    var box = document.getElementById("perf-stats");
-    if(!box) return;
-    var total = tasksCache.length;
-    var doneCount = tasksCache.filter(function(t){ return t.done; }).length;
-    var pending = total - doneCount;
-    var today = startOfDay(new Date());
-    var overdue = tasksCache.filter(function(t){ return !t.done && t.due_at && daysBetween(today, new Date(t.due_at)) < 0; }).length;
-    var pct = total ? Math.round((doneCount/total)*100) : 0;
-    box.innerHTML =
-      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">' +
-        statTile(doneCount,"Hechas") + statTile(pending,"Pendientes") + statTile(overdue,"Vencidas") + statTile(pct+"%","Completado") +
-      '</div>' +
-      '<div style="height:10px;border-radius:99px;background:var(--surface-2);overflow:hidden;">' +
-        '<div style="height:100%;width:'+pct+'%;background:var(--accent);"></div>' +
-      '</div>';
-  }
-
   // ---------- HORARIO ----------
-
   var DOWS=["Lunes","Martes","Miércoles","Jueves","Viernes"], DOWS_SHORT=["Lun","Mar","Mié","Jue","Vie"], HOUR_PX=44;
   function scheduleHourRange(){
     var minH = 8, maxH = 21;
@@ -887,28 +783,24 @@ onAuthStateChanged(auth, function(user){
     }
     return {start:minH, end:maxH};
   }
-  function syncSchedOtherField(selectEl, otherEl){
-    otherEl.style.display = (selectEl.value === "__other__") ? "block" : "none";
-  }
-  populateSubjectSelect(document.getElementById("sched-subject"));
-  syncSchedOtherField(document.getElementById("sched-subject"), document.getElementById("sched-subject-other"));
+  (function(){
+    var sel = document.getElementById("sched-subject"); var html="";
+    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
+  })();
   document.getElementById("sched-subject").addEventListener("change", function(){
-    syncSchedOtherField(this, document.getElementById("sched-subject-other"));
+    document.getElementById("sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("sched-color").value = colorFor(this.value);
   });
-  document.getElementById("sched-oneoff").addEventListener("change", function(){
-    document.getElementById("sched-days-wrap").style.display = this.checked ? "none" : "block";
-    document.getElementById("sched-date-wrap").style.display = this.checked ? "block" : "none";
-  });
 
-  populateSubjectSelect(document.getElementById("edit-sched-subject"));
+  (function(){
+    var sel = document.getElementById("edit-sched-subject"); var html="";
+    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
+  })();
   document.getElementById("edit-sched-subject").addEventListener("change", function(){
     document.getElementById("edit-sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("edit-sched-color").value = colorFor(this.value);
-  });
-  document.getElementById("edit-sched-oneoff").addEventListener("change", function(){
-    document.getElementById("edit-sched-day-wrap").style.display = this.checked ? "none" : "block";
-    document.getElementById("edit-sched-date-wrap").style.display = this.checked ? "block" : "none";
   });
 
   var editingSchedId = null;
@@ -916,17 +808,12 @@ onAuthStateChanged(auth, function(user){
     var b = schedCache.find(function(x){ return x.id===id; });
     if(!b) return;
     editingSchedId = id;
-    populateSubjectSelect(document.getElementById("edit-sched-subject"));
     var sel = document.getElementById("edit-sched-subject");
-    var known = knownSubjects().indexOf(b.subject) !== -1;
+    var known = SUBJECTS.indexOf(b.subject) !== -1;
     sel.value = known ? b.subject : "__other__";
     document.getElementById("edit-sched-subject-other").style.display = known ? "none" : "block";
     document.getElementById("edit-sched-subject-other").value = known ? "" : b.subject;
-    document.getElementById("edit-sched-oneoff").checked = !!b.date;
-    document.getElementById("edit-sched-day-wrap").style.display = b.date ? "none" : "block";
-    document.getElementById("edit-sched-date-wrap").style.display = b.date ? "block" : "none";
     document.getElementById("edit-sched-day").value = b.day;
-    document.getElementById("edit-sched-date").value = b.date || "";
     document.getElementById("edit-sched-room").value = b.room || "";
     document.getElementById("edit-sched-start").value = b.start;
     document.getElementById("edit-sched-end").value = b.end;
@@ -941,7 +828,7 @@ onAuthStateChanged(auth, function(user){
   document.getElementById("edit-sched-cancel").addEventListener("click", closeEditSched);
   document.getElementById("edit-sched-delete").addEventListener("click", function(){
     if(!editingSchedId) return;
-    deleteDoc(uDoc("schedule",editingSchedId)).then(closeEditSched).catch(showError);
+    deleteDoc(doc(db,"users",ALLOWED_EMAIL,"schedule",editingSchedId)).then(closeEditSched).catch(showError);
   });
   document.getElementById("edit-sched-form").addEventListener("submit", function(e){
     e.preventDefault();
@@ -951,47 +838,22 @@ onAuthStateChanged(auth, function(user){
       subject = document.getElementById("edit-sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var oneoff = document.getElementById("edit-sched-oneoff").checked;
-    var day, date;
-    if(oneoff){
-      date = document.getElementById("edit-sched-date").value;
-      if(!date){ showError({message:"Elige una fecha."}); return; }
-      day = DOW_NAMES[new Date(date+"T12:00:00").getDay()];
-    } else {
-      day = document.getElementById("edit-sched-day").value;
-      date = null;
-    }
-    var room = document.getElementById("edit-sched-room").value.trim();
+    var day = document.getElementById("edit-sched-day").value, room = document.getElementById("edit-sched-room").value.trim();
     var start = document.getElementById("edit-sched-start").value, end = document.getElementById("edit-sched-end").value;
     var color = document.getElementById("edit-sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    updateDoc(uDoc("schedule",editingSchedId), { subject:subject, day:day, date:date, room:room, start:start, end:end, color:color })
+    updateDoc(doc(db,"users",ALLOWED_EMAIL,"schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
       .then(closeEditSched)
       .catch(showError);
   });
-  var DOW_NAMES = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
-  function weekRangeOfToday(){
-    var now = new Date();
-    var dow = (now.getDay()+6)%7;
-    var monday = new Date(now); monday.setHours(0,0,0,0); monday.setDate(now.getDate()-dow);
-    var sunday = new Date(monday); sunday.setDate(monday.getDate()+6); sunday.setHours(23,59,59,999);
-    return {start:monday, end:sunday};
-  }
-  function isVisibleThisWeek(b){
-    if(!b.date) return true;
-    var d = new Date(b.date+"T12:00:00");
-    var range = weekRangeOfToday();
-    return d >= range.start && d <= range.end;
-  }
+
   function subscribeSchedule(){
-    onSnapshot(uColl("schedule"), function(qs){
+    onSnapshot(collection(db,"users",ALLOWED_EMAIL,"schedule"), function(qs){
       schedCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; schedCache.push(o); });
       renderHorario();
-      populateSubjectSelect(document.getElementById("sched-subject"));
-      populateSubjectSelect(document.getElementById("edit-sched-subject"));
-    }, function(){});
+    }, function(err){ document.getElementById("horario-grid").innerHTML = '<div style="color:red;padding:8px;">ERROR: ' + esc(err.message) + '</div>'; });
   }
   function renderHorario(){
     var range = scheduleHourRange(); var H_START = range.start, H_END = range.end;
@@ -1004,11 +866,11 @@ onAuthStateChanged(auth, function(user){
     html += '</div>';
     DOWS.forEach(function(day){
       html += '<div class="h-col" style="height:'+totalH+'px;">';
-      schedCache.filter(function(b){ return b.day===day && isVisibleThisWeek(b); }).forEach(function(b){
+      schedCache.filter(function(b){ return b.day===day; }).forEach(function(b){
         var sm=toMinutes(b.start), em=toMinutes(b.end);
         var top=Math.max(0,(sm-H_START*60))*(HOUR_PX/60), height=Math.max(20,(em-sm))*(HOUR_PX/60);
         var col = b.color || colorFor(b.subject);
-        html += '<div class="h-block" data-id="'+esc(b.id)+'" style="top:'+top+'px;height:'+height+'px;background:'+col+';"><div class="t">'+esc(b.subject)+(b.date?" 📌":"")+'</div><div class="r">'+esc(b.start)+'–'+esc(b.end)+(b.room?(" · "+esc(b.room)):"")+'</div></div>';
+        html += '<div class="h-block" data-id="'+esc(b.id)+'" style="top:'+top+'px;height:'+height+'px;background:'+col+';"><div class="t">'+esc(b.subject)+'</div><div class="r">'+esc(b.start)+'–'+esc(b.end)+(b.room?(" · "+esc(b.room)):"")+'</div></div>';
       });
       html += '</div>';
     });
@@ -1017,7 +879,7 @@ onAuthStateChanged(auth, function(user){
 
     var dowIdx = new Date().getDay();
     var todayName = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"][dowIdx];
-    var todayItems = schedCache.filter(function(b){ return b.day === todayName && isVisibleThisWeek(b); }).sort(function(a,b){ return toMinutes(a.start)-toMinutes(b.start); });
+    var todayItems = schedCache.filter(function(b){ return b.day === todayName; }).sort(function(a,b){ return toMinutes(a.start)-toMinutes(b.start); });
     var todayBox = document.getElementById("horario-today");
     if(todayBox){
       if(!todayItems.length){
@@ -1032,7 +894,7 @@ onAuthStateChanged(auth, function(user){
     }
 
     var listBox = document.getElementById("sched-list");
-    var sixth = schedCache.filter(function(b){ return (b.day==="Sábado" || b.day==="Domingo") && isVisibleThisWeek(b); });
+    var sixth = schedCache.filter(function(b){ return b.day==="Sábado" || b.day==="Domingo"; });
     listBox.innerHTML = sixth.length ? ("<div class='muted' style='margin-bottom:6px;'>Fuera de la vista semanal:</div>" +
       sixth.map(function(b){ return '<div class="sched-item"><span>'+esc(b.subject)+' — '+esc(b.day)+' '+esc(b.start)+'–'+esc(b.end)+'</span><button class="btn small" data-edit="'+esc(b.id)+'">Editar</button></div>'; }).join("")) : "";
     listBox.querySelectorAll("[data-edit]").forEach(function(btn){ btn.addEventListener("click", function(){ openEditSched(btn.dataset.edit); }); });
@@ -1046,34 +908,15 @@ onAuthStateChanged(auth, function(user){
       subject = document.getElementById("sched-subject-other").value.trim();
       if(!subject){ showError({message:"Escribe el nombre de la asignatura en \"Otra…\"."}); return; }
     }
-    var oneoff = document.getElementById("sched-oneoff").checked;
-    var room = document.getElementById("sched-room").value.trim();
+    var day = document.getElementById("sched-day").value, room = document.getElementById("sched-room").value.trim();
     var start = document.getElementById("sched-start").value, end = document.getElementById("sched-end").value;
     var color = document.getElementById("sched-color").value;
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
-
-    var entries = [];
-    if(oneoff){
-      var dateVal = document.getElementById("sched-date").value;
-      if(!dateVal){ showError({message:"Elige una fecha."}); return; }
-      var day = DOW_NAMES[new Date(dateVal+"T12:00:00").getDay()];
-      entries.push({ subject:subject, day:day, date:dateVal, room:room, start:start, end:end, color:color });
-    } else {
-      var days = Array.prototype.map.call(document.querySelectorAll(".sched-day-check:checked"), function(cb){ return cb.value; });
-      if(!days.length){ showError({message:"Elige al menos un día."}); return; }
-      days.forEach(function(day){ entries.push({ subject:subject, day:day, date:null, room:room, start:start, end:end, color:color }); });
-    }
-
     saveColor(subject, color);
-    Promise.all(entries.map(function(entry){ return addDoc(uColl("schedule"), entry); }))
-      .then(function(){
-        document.getElementById("add-sched-form").reset();
-        document.getElementById("sched-subject-other").style.display="none";
-        document.getElementById("sched-color").value="#24566A";
-        document.getElementById("sched-days-wrap").style.display="block";
-        document.getElementById("sched-date-wrap").style.display="none";
-      }).catch(showError);
+    addDoc(collection(db,"users",ALLOWED_EMAIL,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+      .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; document.getElementById("sched-color").value="#24566A"; })
+      .catch(showError);
   });
 
   // ---------- Avisos push (iPhone añadido a pantalla de inicio) ----------
@@ -1092,26 +935,10 @@ onAuthStateChanged(auth, function(user){
     var btn = document.getElementById("enable-push");
     if(!("serviceWorker" in navigator) || !("PushManager" in window)){ btn.style.display = "none"; return; }
     if(Notification.permission !== "granted") return;
-    navigator.serviceWorker.register("sw.js").then(function(){
-      return navigator.serviceWorker.ready;
-    }).then(function(reg){
-      return reg.pushManager.getSubscription().then(function(sub){
-        if(sub) return sub;
-        // El permiso ya estaba concedido pero la suscripción se perdió (pasa a veces
-        // en iPhone si llevas unos días sin abrir la app) - la rehacemos sin preguntar nada.
-        return reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-        });
-      });
+    navigator.serviceWorker.getRegistration().then(function(reg){
+      return reg && reg.pushManager.getSubscription();
     }).then(function(sub){
-      if(!sub) return;
-      var raw = sub.toJSON();
-      return setDoc(uDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
-        endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
-      });
-    }).then(function(){
-      btn.textContent = "🔔 Avisos activados"; btn.disabled = true;
+      if(sub){ btn.textContent = "🔔 Avisos activados"; btn.disabled = true; }
     }).catch(function(){});
   }
   function enablePush(){
@@ -1131,7 +958,7 @@ onAuthStateChanged(auth, function(user){
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
         }).then(function(sub){
           var raw = sub.toJSON();
-          setDoc(uDoc("pushSubscriptions", subIdFor(raw.endpoint)), {
+          setDoc(doc(db,"users",ALLOWED_EMAIL,"pushSubscriptions", subIdFor(raw.endpoint)), {
             endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
           }).then(function(){
             var btn = document.getElementById("enable-push");
@@ -1143,23 +970,6 @@ onAuthStateChanged(auth, function(user){
   }
   document.getElementById("enable-push").addEventListener("click", enablePush);
   refreshPushButton();
-
-  // ---------- Actualizarse sola cuando hay una versión nueva publicada ----------
-  function checkForUpdate(){
-    fetch(location.href, { method:"HEAD", cache:"no-store" }).then(function(res){
-      var serverModified = res.headers.get("Last-Modified");
-      if(!serverModified) return;
-      var serverTime = new Date(serverModified).getTime();
-      var currentTime = new Date(document.lastModified).getTime();
-      if(serverTime && currentTime && serverTime > currentTime + 1000){
-        location.reload();
-      }
-    }).catch(function(){});
-  }
-  document.addEventListener("visibilitychange", function(){
-    if(document.visibilityState === "visible"){ checkForUpdate(); refreshPushButton(); }
-  });
-  setInterval(checkForUpdate, 10 * 60 * 1000);
 
 })();
 </script>
