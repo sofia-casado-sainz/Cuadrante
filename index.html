@@ -748,9 +748,13 @@ onAuthStateChanged(auth, function(user){
     }
     return {start:minH, end:maxH};
   }
+  function syncSchedOtherField(selectEl, otherEl){
+    otherEl.style.display = (selectEl.value === "__other__") ? "block" : "none";
+  }
   populateSubjectSelect(document.getElementById("sched-subject"));
+  syncSchedOtherField(document.getElementById("sched-subject"), document.getElementById("sched-subject-other"));
   document.getElementById("sched-subject").addEventListener("change", function(){
-    document.getElementById("sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
+    syncSchedOtherField(this, document.getElementById("sched-subject-other"));
     if(this.value !== "__other__") document.getElementById("sched-color").value = colorFor(this.value);
   });
   document.getElementById("sched-oneoff").addEventListener("change", function(){
