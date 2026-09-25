@@ -179,9 +179,9 @@
 
 <div id="gate">
   <h1>Cuadrante</h1>
-  <p>Tu panel personal de Canvas. Inicia sesión para ver tus tareas y avisos.</p>
+  <p>Tu panel personal de tareas y avisos. Inicia sesión para verlos.</p>
   <form id="login-form" style="display:flex;flex-direction:column;gap:8px;max-width:280px;margin:0 auto;">
-    <input id="login-email" type="email" value="9206029@alumnos.ufv.es" required>
+    <input id="login-email" type="email" placeholder="Tu email" required>
     <input id="login-password" type="password" placeholder="Contraseña" required>
     <button class="btn primary" type="submit">Entrar</button>
   </form>
@@ -354,7 +354,9 @@ const firebaseConfig = {
   appId: "1:865869614711:web:9b77b3c66f1078598fc072"
 };
 // Solo esta cuenta puede iniciar sesión (se comprueba también en las reglas de Firestore):
-const ALLOWED_EMAIL = "9206029@alumnos.ufv.es";
+const ALLOWED_EMAILS = ["9206029@alumnos.ufv.es", "ana.ecenarro@edu.uah.es"];
+// El email de quien haya iniciado sesión ahora mismo (se rellena solo al entrar):
+var myEmail = null;
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -384,7 +386,7 @@ const db = getFirestore(app);
   function saveColor(subject, hex){
     if(!subject) return;
     var patch = {}; patch[subject] = hex;
-    setDoc(doc(db,"users",ALLOWED_EMAIL,"settings","colors"), patch, {merge:true}).catch(showError);
+    setDoc(doc(db,"users",myEmail,"settings","colors"), patch, {merge:true}).catch(showError);
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
   function pad(n){ return n<10 ? "0"+n : ""+n; }
@@ -409,15 +411,17 @@ const db = getFirestore(app);
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
 
   onAuthStateChanged(auth, function(user){
-    if(user && user.email === ALLOWED_EMAIL){
+    if(user && ALLOWED_EMAILS.indexOf(user.email) !== -1){
+      myEmail = user.email;
       document.getElementById("gate").style.display = "none";
       document.getElementById("app").style.display = "block";
       startApp();
     } else {
+      myEmail = null;
       document.getElementById("app").style.display = "none";
       document.getElementById("gate").style.display = "flex";
-      if(user && user.email !== ALLOWED_EMAIL){
-        document.getElementById("gate-error").textContent = "Esta app es solo para " + ALLOWED_EMAIL;
+      if(user && ALLOWED_EMAILS.indexOf(user.email) === -1){
+        document.getElementById("gate-error").textContent = "Esta cuenta no tiene acceso a Cuadrante.";
         signOut(auth);
       }
     }
@@ -480,14 +484,14 @@ const db = getFirestore(app);
   }
 
   function subscribeColors(){
-    onSnapshot(doc(db,"users",ALLOWED_EMAIL,"settings","colors"), function(snap){
+    onSnapshot(doc(db,"users",myEmail,"settings","colors"), function(snap){
       customColors = snap.exists() ? (snap.data()||{}) : {};
       renderTasks(); renderAvisos(); renderCalendar(); renderHorario();
     }, function(){});
   }
 
   function subscribeMeta(){
-    onSnapshot(doc(db,"users",ALLOWED_EMAIL,"meta","sync"), function(snap){
+    onSnapshot(doc(db,"users",myEmail,"meta","sync"), function(snap){
       var data = snap.exists() ? snap.data() : {};
       document.getElementById("tasks-sync-note").textContent = fmtSync(data.tasks_last_sync, "fechas de entrega");
       document.getElementById("avisos-sync-note").textContent = fmtSync(data.avisos_last_sync, "avisos");
@@ -499,7 +503,7 @@ const db = getFirestore(app);
 
   // ---------- AVISOS ----------
   function subscribeAvisos(){
-    var q = query(collection(db,"users",ALLOWED_EMAIL,"avisos"), orderBy("posted_at","desc"), limit(200));
+    var q = query(collection(db,"users",myEmail,"avisos"), orderBy("posted_at","desc"), limit(200));
     onSnapshot(q, function(qs){
       avisosCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; avisosCache.push(o); });
       renderAvisos();
@@ -520,7 +524,7 @@ const db = getFirestore(app);
     }
     box.innerHTML = items.map(avisoCard).join("");
     box.querySelectorAll("input[type=checkbox][data-avid]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",myEmail,"avisos",cb.dataset.avid), {leido: cb.checked}).catch(showError); });
     });
   }
   function avisoCard(a){
@@ -538,7 +542,7 @@ const db = getFirestore(app);
 
   // ---------- TAREAS ----------
   function subscribeTasks(){
-    var q = query(collection(db,"users",ALLOWED_EMAIL,"tasks"), orderBy("due_at","asc"), limit(500));
+    var q = query(collection(db,"users",myEmail,"tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
       renderTasks(); renderCalendar(); renderAgenda();
@@ -572,7 +576,7 @@ const db = getFirestore(app);
     if(!any){ html = '<div class="empty-state"><div class="big">✅</div>'+(tasksCache.length?"No hay tareas pendientes con estos filtros.":"No hay tareas todavía.")+'</div>'; }
     list.innerHTML = html;
     list.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",myEmail,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
     list.querySelectorAll(".pill.editable").forEach(function(p){ p.addEventListener("click", function(){ toggleCourseEditor(p); }); });
   }
@@ -603,7 +607,7 @@ const db = getFirestore(app);
     var task = tasksCache.find(function(t){ return t.id===id; });
     if(task && task.course) ed.querySelector("select").value = task.course;
     ed.querySelector("button").addEventListener("click", function(){
-      updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",id), {course: ed.querySelector("select").value}).catch(showError);
+      updateDoc(doc(db,"users",myEmail,"tasks",id), {course: ed.querySelector("select").value}).catch(showError);
       ed.style.display="none";
     });
   }
@@ -613,7 +617,7 @@ const db = getFirestore(app);
     var titleEl = document.getElementById("new-task-title"), dateEl = document.getElementById("new-task-date");
     var title = titleEl.value.trim(); if(!title) return;
     var due_at = dateEl.value ? new Date(dateEl.value+"T23:59:00").toISOString() : null;
-    addDoc(collection(db,"users",ALLOWED_EMAIL,"tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
+    addDoc(collection(db,"users",myEmail,"tasks"), { title:title, course:"", due_at:due_at, url:"", type:"manual", source:"user", done:false, updated_at:new Date().toISOString() })
       .then(function(){ titleEl.value=""; dateEl.value=""; }).catch(showError);
   });
 
@@ -622,7 +626,7 @@ const db = getFirestore(app);
   function todayKey(){ var t=startOfDay(new Date()); return t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate()); }
 
   function subscribeAgenda(){
-    onSnapshot(collection(db,"users",ALLOWED_EMAIL,"agenda"), function(qs){
+    onSnapshot(collection(db,"users",myEmail,"agenda"), function(qs){
       agendaCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; agendaCache.push(o); });
       renderAgenda();
     }, function(err){ document.getElementById("agenda-list").innerHTML = '<div style="color:red">ERROR: ' + esc(err.message) + '</div>'; });
@@ -687,14 +691,14 @@ const db = getFirestore(app);
         var item = agendaCache.find(function(a){ return a.id === cb.dataset.agid; });
         var patch = {done: cb.checked};
         if(cb.checked) patch.hecho_el = todayKey();
-        updateDoc(doc(db,"users",ALLOWED_EMAIL,"agenda",cb.dataset.agid), patch).catch(showError);
+        updateDoc(doc(db,"users",myEmail,"agenda",cb.dataset.agid), patch).catch(showError);
         if(cb.dataset.tipo === "tarea" && item && item.task_id){
-          updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",item.task_id), {done: cb.checked}).catch(showError);
+          updateDoc(doc(db,"users",myEmail,"tasks",item.task_id), {done: cb.checked}).catch(showError);
         }
       });
     });
     box.querySelectorAll("[data-del]").forEach(function(btn){
-      btn.addEventListener("click", function(){ deleteDoc(doc(db,"users",ALLOWED_EMAIL,"agenda",btn.dataset.del)).catch(showError); });
+      btn.addEventListener("click", function(){ deleteDoc(doc(db,"users",myEmail,"agenda",btn.dataset.del)).catch(showError); });
     });
   }
 
@@ -702,7 +706,7 @@ const db = getFirestore(app);
     e.preventDefault();
     var textEl = document.getElementById("new-agenda-text"), dateEl = document.getElementById("new-agenda-date");
     var texto = textEl.value.trim(); if(!texto) return;
-    addDoc(collection(db,"users",ALLOWED_EMAIL,"agenda"), {
+    addDoc(collection(db,"users",myEmail,"agenda"), {
       texto: texto, dia: todayKey(), done: false, tipo: "personal",
       vencimiento: dateEl.value || null, fuente: "manual",
       creado: new Date().toISOString()
@@ -765,7 +769,7 @@ const db = getFirestore(app);
     items.forEach(function(t){ html += taskRow(t, bucketOf(t, startOfDay(new Date()))); });
     box.innerHTML = html;
     box.querySelectorAll("input[type=checkbox][data-id]").forEach(function(cb){
-      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",ALLOWED_EMAIL,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
+      cb.addEventListener("change", function(){ updateDoc(doc(db,"users",myEmail,"tasks",cb.dataset.id), {done: cb.checked}).catch(showError); });
     });
   }
 
@@ -828,7 +832,7 @@ const db = getFirestore(app);
   document.getElementById("edit-sched-cancel").addEventListener("click", closeEditSched);
   document.getElementById("edit-sched-delete").addEventListener("click", function(){
     if(!editingSchedId) return;
-    deleteDoc(doc(db,"users",ALLOWED_EMAIL,"schedule",editingSchedId)).then(closeEditSched).catch(showError);
+    deleteDoc(doc(db,"users",myEmail,"schedule",editingSchedId)).then(closeEditSched).catch(showError);
   });
   document.getElementById("edit-sched-form").addEventListener("submit", function(e){
     e.preventDefault();
@@ -844,13 +848,13 @@ const db = getFirestore(app);
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    updateDoc(doc(db,"users",ALLOWED_EMAIL,"schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+    updateDoc(doc(db,"users",myEmail,"schedule",editingSchedId), { subject:subject, day:day, room:room, start:start, end:end, color:color })
       .then(closeEditSched)
       .catch(showError);
   });
 
   function subscribeSchedule(){
-    onSnapshot(collection(db,"users",ALLOWED_EMAIL,"schedule"), function(qs){
+    onSnapshot(collection(db,"users",myEmail,"schedule"), function(qs){
       schedCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; schedCache.push(o); });
       renderHorario();
     }, function(err){ document.getElementById("horario-grid").innerHTML = '<div style="color:red;padding:8px;">ERROR: ' + esc(err.message) + '</div>'; });
@@ -914,7 +918,7 @@ const db = getFirestore(app);
     if(!start || !end){ showError({message:"Rellena la hora de inicio y de fin."}); return; }
     if(toMinutes(end) <= toMinutes(start)){ showError({message:"La hora de fin tiene que ser posterior a la de inicio."}); return; }
     saveColor(subject, color);
-    addDoc(collection(db,"users",ALLOWED_EMAIL,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
+    addDoc(collection(db,"users",myEmail,"schedule"), { subject:subject, day:day, room:room, start:start, end:end, color:color })
       .then(function(){ document.getElementById("add-sched-form").reset(); document.getElementById("sched-subject-other").style.display="none"; document.getElementById("sched-color").value="#24566A"; })
       .catch(showError);
   });
@@ -958,7 +962,7 @@ const db = getFirestore(app);
           applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
         }).then(function(sub){
           var raw = sub.toJSON();
-          setDoc(doc(db,"users",ALLOWED_EMAIL,"pushSubscriptions", subIdFor(raw.endpoint)), {
+          setDoc(doc(db,"users",myEmail,"pushSubscriptions", subIdFor(raw.endpoint)), {
             endpoint: raw.endpoint, keys: raw.keys, updated_at: new Date().toISOString()
           }).then(function(){
             var btn = document.getElementById("enable-push");
