@@ -1,0 +1,23 @@
+name: Generar newsletter (IA, semanal)
+
+on:
+  schedule:
+    # Todos los lunes a las 7:00 UTC (8-9h en España según la época del año).
+    - cron: "0 7 * * 1"
+  workflow_dispatch: {}  # te deja lanzarlo a mano desde la pestaña "Actions" de GitHub
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: pip install "setuptools<69" requests firebase-admin
+      - name: Generar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+        run: python generate_newsletter.py
