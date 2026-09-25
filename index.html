@@ -366,6 +366,9 @@ const firebaseConfig = {
 const ALLOWED_EMAILS = ["9206029@alumnos.ufv.es", "ana.ecenarro@edu.uah.es"];
 // El email de quien haya iniciado sesión ahora mismo (se rellena solo al entrar):
 var myEmail = null;
+// Cuentas que no tienen "Avisos" (Blackboard no trae anuncios, solo entregas, así que a esa
+// cuenta nunca le va a llegar nada ahí — mejor no mostrarle una pestaña que siempre está vacía):
+const SIN_AVISOS = ["ana.ecenarro@edu.uah.es"];
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -419,9 +422,20 @@ const db = getFirestore(app);
   });
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
 
+  function applyFeatureVisibility(){
+    var avisosBtn = document.querySelector('nav.tabs button[data-tab="avisos"]');
+    var sinAvisos = SIN_AVISOS.indexOf(myEmail) !== -1;
+    avisosBtn.style.display = sinAvisos ? "none" : "";
+    if(sinAvisos && document.getElementById("view-avisos").classList.contains("active")){
+      activateTab("agenda");
+      try{ localStorage.setItem("cuadrante_last_tab", "agenda"); }catch(e){}
+    }
+  }
+
   onAuthStateChanged(auth, function(user){
     if(user && ALLOWED_EMAILS.indexOf(user.email) !== -1){
       myEmail = user.email;
+      applyFeatureVisibility();
       document.getElementById("gate").style.display = "none";
       document.getElementById("app").style.display = "block";
       startApp();
