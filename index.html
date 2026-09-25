@@ -37,7 +37,7 @@
   html{ margin:0; background:var(--bg); }
   body{
     margin:0; background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans', system-ui, sans-serif;
-    padding:0 16px calc(28px + env(safe-area-inset-bottom,0px)) 16px;
+    padding:env(safe-area-inset-top,0px) 16px calc(28px + env(safe-area-inset-bottom,0px)) 16px;
     -webkit-font-smoothing:antialiased;
   }
   h1,h2,h3{ font-family:'Fraunces', Georgia, serif; margin:0; }
@@ -45,11 +45,12 @@
   a{ color:var(--accent); }
 
   header.top{
-    position:sticky; top:env(safe-area-inset-top,0px); background:var(--bg);
-    padding:18px 0 10px 0; z-index:20; border-bottom:1px solid var(--border);
-    /* El espacio hasta el panel de abajo NO va aquí (margin-bottom en un elemento
-       sticky no siempre empuja el contenido en Safari de iPhone) — va en el
-       margin-top de <main>, justo abajo. */
+    background:var(--bg);
+    padding:18px 0 10px 0; border-bottom:1px solid var(--border);
+    /* Sin position:sticky a propósito: el menú se desplaza con el resto del
+       contenido, no se queda fijo arriba. El hueco del notch/Dynamic Island ya
+       lo pone el padding-top de <body>. El espacio hasta el panel de abajo va
+       en el margin-top de <main>, justo abajo. */
   }
   .brand{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .brand h1{ font-size:26px; font-weight:600; letter-spacing:-0.01em; }
