@@ -201,7 +201,7 @@
     <button data-tab="avisos">Avisos</button>
     <button data-tab="calendario">Calendario</button>
     <button data-tab="horario">Horario</button>
-    <button data-tab="mas">Más</button>
+    <button data-tab="reto">Reto</button>
   </nav>
 </header>
 
@@ -320,14 +320,21 @@
     </div>
   </section>
 
-  <section class="view" id="view-mas">
+  <section class="view" id="view-reto">
     <div class="panel">
-      <div class="panel-head"><h2>Más</h2></div>
-      <div class="muted" style="margin-bottom:10px;">Newsletter semanal y sugerencias de cursos: estas dos viven en tu panel de Claude, porque se generan con IA.</div>
-      <a class="more-card" href="https://claude.ai/artifact/8MtYBJJA2hKbA2u4EW12ak" target="_blank" rel="noopener">
-        <div class="t">Newsletter y Cursos ↗</div>
-        <div class="d">Abre el panel de Claude para ver la newsletter de los lunes y las sugerencias de certificaciones.</div>
-      </a>
+      <div class="panel-head"><h2>Tu rendimiento</h2></div>
+      <div id="perf-stats"><div class="skeleton" style="width:70%"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Reto de hoy</h2></div>
+      <div class="muted" style="margin-bottom:10px;" id="reto-challenge-text">Cargando…</div>
+      <button class="btn primary" type="button" id="reto-mark-btn">Marcar como cumplido hoy</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Competición</h2></div>
+      <div id="reto-compare"></div>
     </div>
   </section>
 
@@ -534,11 +541,10 @@ onAuthStateChanged(auth, function(user){
 
   function startApp(){
     if(started) return; started = true;
-    subscribeMeta(); subscribeTasks(); subscribeSchedule(); subscribeColors();
+    subscribeMeta(); subscribeTasks(); subscribeSchedule(); subscribeColors(); subscribeRetos();
     if(!isUAH){ subscribeAvisos(); }
     renderCalendar();
   }
-
   function subscribeColors(){
     onSnapshot(uDoc("settings","colors"), function(snap){
       customColors = snap.exists() ? (snap.data()||{}) : {};
@@ -598,7 +604,7 @@ onAuthStateChanged(auth, function(user){
     var q = query(uColl("tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
-      renderTasks(); renderCalendar();
+      renderTasks(); renderCalendar(); renderTaskPerformance();
     }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
   }
   document.getElementById("hide-done").addEventListener("change", function(){
@@ -734,7 +740,140 @@ onAuthStateChanged(auth, function(user){
     });
   }
 
+    // ---------- RETO DIARIO Y COMPETICIÓN ----------
+  var UFV_EMAIL = "9206029@alumnos.ufv.es";
+  var UAH_EMAIL = "ana.ecenarro@edu.uah.es";
+  function otherUserEmail(){ return isUAH ? UFV_EMAIL : UAH_EMAIL; }
+  function otherUserLabel(){ return isUAH ? "Sofía (UFV)" : "Ana (UAH)"; }
+
+  var DAILY_CHALLENGES = [
+    "Bebe al menos 1,5 L de agua hoy",
+    "Sal a caminar o muévete al aire libre 15 minutos",
+    "Duerme (o intenta dormir) al menos 7 horas esta noche",
+    "Haz 10 minutos de estiramientos",
+    "Desconecta del móvil 30 minutos antes de dormir",
+    "Haz una pausa de pantallas cada 2 horas de estudio",
+    "Prepara o come algo casero y saludable",
+    "Escribe 3 cosas por las que estés agradecida hoy",
+    "Respira profundo o medita 5 minutos",
+    "Ordena tu espacio de estudio 5 minutos",
+    "Lee 10 páginas de algo que no sea de clase",
+    "Llama o escribe a alguien que quieras",
+    "Tómate 10 minutos de sol o aire libre",
+    "Haz una pequeña rutina de ejercicio (10 min)",
+    "Escribe cómo te sientes hoy, aunque sea una frase",
+    "Termina la ducha con agua fría 20-30 segundos",
+    "Haz algo creativo 10 minutos (dibujar, escribir, música)",
+    "Evita las pantallas la primera media hora tras despertar",
+    "Organiza tu semana en 5 minutos",
+    "Da las gracias a alguien hoy, aunque sea por mensaje"
+  ];
+  function isoDateOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+  function todayISODate(){ return isoDateOf(new Date()); }
+  function dayOfYear(d){
+    var start = new Date(d.getFullYear(), 0, 0);
+    return Math.floor((d - start) / 86400000);
+  }
+  function todayChallenge(){
+    return DAILY_CHALLENGES[dayOfYear(new Date()) % DAILY_CHALLENGES.length];
+  }
+  function retoDoc(email){ return doc(db, "retos", email); }
+
+  var retoCache = { me: null, other: null };
+
+  function displayStreak(summary){
+    if(!summary || !summary.last_done_date) return 0;
+    var y = new Date(); y.setDate(y.getDate()-1);
+    if(summary.last_done_date === todayISODate() || summary.last_done_date === isoDateOf(y)) return summary.current_streak || 0;
+    return 0;
+  }
+
+  function subscribeRetos(){
+    onSnapshot(retoDoc(currentUserEmail), function(snap){
+      retoCache.me = snap.exists() ? snap.data() : null;
+      renderReto();
+    }, function(){});
+    onSnapshot(retoDoc(otherUserEmail()), function(snap){
+      retoCache.other = snap.exists() ? snap.data() : null;
+      renderReto();
+    }, function(){});
+  }
+
+  function markChallengeDoneToday(){
+    var today = todayISODate();
+    var mine = retoCache.me || {current_streak:0,best_streak:0,last_done_date:null,total_done:0,recent_days:[]};
+    if(mine.last_done_date === today) return;
+    var y = new Date(); y.setDate(y.getDate()-1);
+    var newStreak = (mine.last_done_date === isoDateOf(y)) ? (mine.current_streak||0) + 1 : 1;
+    var newBest = Math.max(mine.best_streak||0, newStreak);
+    var recent = (mine.recent_days||[]).concat([today]);
+    if(recent.length > 60) recent = recent.slice(recent.length-60);
+    setDoc(retoDoc(currentUserEmail), {
+      current_streak: newStreak, best_streak: newBest, last_done_date: today,
+      total_done: (mine.total_done||0) + 1, recent_days: recent
+    }, {merge:true}).catch(showError);
+  }
+
+  function retoStrip(recentDaysArr){
+    var set = {}; (recentDaysArr||[]).forEach(function(d){ set[d]=true; });
+    var html = '<div style="display:flex;gap:3px;flex-wrap:wrap;">';
+    var d = new Date(); d.setDate(d.getDate()-29);
+    for(var i=0;i<30;i++){
+      var key = isoDateOf(d);
+      html += '<div title="'+key+'" style="width:9px;height:9px;border-radius:2px;background:'+(set[key]?"var(--accent)":"var(--surface-2)")+';border:1px solid var(--border);"></div>';
+      d.setDate(d.getDate()+1);
+    }
+    return html + '</div>';
+  }
+
+  function renderReto(){
+    var textBox = document.getElementById("reto-challenge-text");
+    var btn = document.getElementById("reto-mark-btn");
+    if(textBox) textBox.textContent = todayChallenge();
+    if(btn){
+      var doneToday = retoCache.me && retoCache.me.last_done_date === todayISODate();
+      btn.textContent = doneToday ? "✅ Reto cumplido hoy" : "Marcar como cumplido hoy";
+      btn.disabled = !!doneToday;
+    }
+    var box = document.getElementById("reto-compare");
+    if(!box) return;
+    var myStreak = displayStreak(retoCache.me), otherStreak = displayStreak(retoCache.other);
+    var winner = myStreak === otherStreak ? "Vais empatadas" : (myStreak > otherStreak ? "Vas ganando tú 🎉" : otherUserLabel()+" va ganando");
+    box.innerHTML =
+      '<div class="muted" style="margin-bottom:10px;font-weight:600;color:var(--ink);">'+esc(winner)+'</div>' +
+      '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:14px;">' +
+        '<div><div class="mono" style="font-size:22px;font-weight:600;">'+myStreak+'</div><div class="muted" style="font-size:11px;">Tu racha</div></div>' +
+        '<div><div class="mono" style="font-size:22px;font-weight:600;">'+otherStreak+'</div><div class="muted" style="font-size:11px;">Racha de '+esc(otherUserLabel())+'</div></div>' +
+      '</div>' +
+      '<div class="muted" style="font-size:11px;margin-bottom:4px;">Tú (últimos 30 días)</div>' + retoStrip(retoCache.me ? retoCache.me.recent_days : []) +
+      '<div class="muted" style="font-size:11px;margin:10px 0 4px;">'+esc(otherUserLabel())+' (últimos 30 días)</div>' + retoStrip(retoCache.other ? retoCache.other.recent_days : []);
+  }
+  document.getElementById("reto-mark-btn").addEventListener("click", markChallengeDoneToday);
+
+  // ---------- RENDIMIENTO EN TAREAS ----------
+  function statTile(value, label){
+    return '<div style="flex:1;min-width:70px;text-align:center;"><div class="mono" style="font-size:20px;font-weight:600;">'+esc(String(value))+'</div><div class="muted" style="font-size:11px;">'+esc(label)+'</div></div>';
+  }
+  function renderTaskPerformance(){
+    var box = document.getElementById("perf-stats");
+    if(!box) return;
+    var total = tasksCache.length;
+    var doneCount = tasksCache.filter(function(t){ return t.done; }).length;
+    var pending = total - doneCount;
+    var today = startOfDay(new Date());
+    var overdue = tasksCache.filter(function(t){ return !t.done && t.due_at && daysBetween(today, new Date(t.due_at)) < 0; }).length;
+    var pct = total ? Math.round((doneCount/total)*100) : 0;
+    box.innerHTML =
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">' +
+        statTile(doneCount,"Hechas") + statTile(pending,"Pendientes") + statTile(overdue,"Vencidas") + statTile(pct+"%","Completado") +
+      '</div>' +
+      '<div style="height:10px;border-radius:99px;background:var(--surface-2);overflow:hidden;">' +
+        '<div style="height:100%;width:'+pct+'%;background:var(--accent);"></div>' +
+      '</div>';
+  }
+
   // ---------- HORARIO ----------
+
   var DOWS=["Lunes","Martes","Miércoles","Jueves","Viernes"], DOWS_SHORT=["Lun","Mar","Mié","Jue","Vie"], HOUR_PX=44;
   function scheduleHourRange(){
     var minH = 8, maxH = 21;
