@@ -168,6 +168,12 @@
   .more-card .t{ font-weight:600; font-size:15px; }
   .more-card .d{ font-size:12.5px; color:var(--ink-dim); margin-top:3px; }
 
+  /* Meter (progreso de tareas) — relleno en --accent, pista en --accent-tint (mismo tono, más claro) */
+  .meter-head{ display:flex; justify-content:space-between; align-items:baseline; }
+  .meter-value{ font-size:22px; font-weight:600; color:var(--ink); }
+  .meter-track{ height:10px; border-radius:99px; background:var(--accent-tint); overflow:hidden; margin-top:8px; }
+  .meter-fill{ height:100%; border-radius:99px; background:var(--accent); transition:width .5s ease; }
+
   /* Login gate */
   #gate{ min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:16px; padding:24px; }
   #gate h1{ font-size:28px; }
@@ -273,7 +279,7 @@
   <section class="view" id="view-horario">
     <div class="panel">
       <div class="panel-head"><h2>Horario de clases</h2></div>
-      <div class="muted" style="line-height:1.5; margin-bottom:8px;">Canvas no trae el horario oficial, así que este lo rellenas tú una vez — se guarda solo.</div>
+      <div class="muted" style="line-height:1.5; margin-bottom:8px;">Ni Canvas ni Blackboard traen el horario oficial, así que este lo rellenas tú una vez — se guarda solo.</div>
       <div class="horario-today" id="horario-today"></div>
       <div class="horario-wrap"><div class="horario-grid" id="horario-grid"></div></div>
 
@@ -320,9 +326,19 @@
 
   <section class="view" id="view-retos">
     <div class="panel">
-      <div class="panel-head"><h2>Retos</h2></div>
-      <div class="muted" style="line-height:1.5;margin-bottom:10px;">Un reto de hábitos saludables por día, elegido de un catálogo compartido que crece solo cada mes con IA. Cambia cada día, sin que tengas que hacer nada.</div>
+      <div class="panel-head">
+        <h2>Retos</h2>
+        <span class="pill" id="racha-badge" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);">🔥 0 días</span>
+      </div>
       <div id="reto-content"><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div></div>
+      <button class="btn primary small" id="reto-hecho-btn" type="button" style="margin-top:14px;">Marcar hecho hoy</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2 style="font-size:15px;">Progreso de tareas</h2></div>
+      <div class="meter-head"><span class="muted" style="font-size:12.5px;">Hechas sobre el total</span><span class="meter-value" id="meter-value">0%</span></div>
+      <div class="meter-track"><div class="meter-fill" id="meter-fill" style="width:0%"></div></div>
+      <div class="muted" id="meter-sub" style="margin-top:8px;font-size:12.5px;"></div>
     </div>
   </section>
 
@@ -369,6 +385,9 @@ var myEmail = null;
 // Cuentas que no tienen "Avisos" (Blackboard no trae anuncios, solo entregas, así que a esa
 // cuenta nunca le va a llegar nada ahí — mejor no mostrarle una pestaña que siempre está vacía):
 const SIN_AVISOS = ["ana.ecenarro@edu.uah.es"];
+// Para que los textos digan la universidad y la plataforma de cada una, no las de la otra:
+const UNIVERSIDAD = { "9206029@alumnos.ufv.es": "UFV", "ana.ecenarro@edu.uah.es": "UAH" };
+const PLATAFORMA  = { "9206029@alumnos.ufv.es": "Canvas", "ana.ecenarro@edu.uah.es": "Blackboard" };
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -430,6 +449,7 @@ const db = getFirestore(app);
       activateTab("agenda");
       try{ localStorage.setItem("cuadrante_last_tab", "agenda"); }catch(e){}
     }
+    document.querySelector(".brand .sub").textContent = (UNIVERSIDAD[myEmail] || "") + " · curso 26/27";
   }
 
   onAuthStateChanged(auth, function(user){
@@ -479,6 +499,7 @@ const db = getFirestore(app);
 
   var started = false;
   var tasksCache = [], schedCache = [], avisosCache = [];
+  var rachaCache = { racha: 0, ultimo_dia: null };
 
    var errToastTimer = null;
   function showError(err){
@@ -495,7 +516,7 @@ const db = getFirestore(app);
   });
 
   function fmtSync(iso, kind){
-    if(!iso) return "Todavía sin sincronizar — en cuanto tus profesores publiquen " + kind + " en Canvas aparecerán aquí solas.";
+    if(!iso) return "Todavía sin sincronizar — en cuanto tus profesores publiquen " + kind + " en " + (PLATAFORMA[myEmail]||"Canvas") + " aparecerán aquí solas.";
     try{ var d = new Date(iso); return "Última sincronización: " + d.toLocaleString("es-ES",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
     catch(e){ return ""; }
   }
@@ -505,6 +526,7 @@ const db = getFirestore(app);
     subscribeMeta(); subscribeTasks(); subscribeAvisos(); subscribeSchedule(); subscribeColors(); subscribeAgenda();
     renderCalendar();
     loadRetoDelDia();
+    subscribeRacha();
   }
 
   // ---------- Retos (catálogo compartido de hábitos saludables — un reto por día) ----------
@@ -530,6 +552,50 @@ const db = getFirestore(app);
       box.innerHTML = '<div class="muted">No se pudo cargar el reto de hoy.</div>';
       showError(e);
     });
+  }
+
+  function subscribeRacha(){
+    onSnapshot(doc(db,"users",myEmail,"meta","retos"), function(snap){
+      rachaCache = snap.exists() ? snap.data() : { racha: 0, ultimo_dia: null };
+      renderRacha();
+    });
+  }
+  function renderRacha(){
+    var badge = document.getElementById("racha-badge");
+    var btn = document.getElementById("reto-hecho-btn");
+    if(!badge || !btn) return;
+    var hoy = todayKey();
+    var hechoHoy = rachaCache.ultimo_dia === hoy;
+    var n = rachaCache.racha || 0;
+    badge.textContent = "🔥 " + n + (n === 1 ? " día" : " días");
+    btn.textContent = hechoHoy ? "✓ Hecho hoy" : "Marcar hecho hoy";
+    btn.disabled = hechoHoy;
+  }
+  function yesterdayKey(){
+    var t = startOfDay(new Date());
+    t.setDate(t.getDate() - 1);
+    return t.getFullYear()+"-"+pad(t.getMonth()+1)+"-"+pad(t.getDate());
+  }
+  document.getElementById("reto-hecho-btn").addEventListener("click", function(){
+    var hoy = todayKey();
+    if(rachaCache.ultimo_dia === hoy) return; // ya marcado hoy, no hacemos nada
+    var seguia = rachaCache.ultimo_dia === yesterdayKey();
+    var nuevaRacha = seguia ? (rachaCache.racha || 0) + 1 : 1;
+    setDoc(doc(db,"users",myEmail,"meta","retos"), { racha: nuevaRacha, ultimo_dia: hoy }, { merge: true }).catch(showError);
+  });
+
+  // ---------- Progreso de tareas (meter en la pestaña Retos) ----------
+  function renderTaskProgress(){
+    var fill = document.getElementById("meter-fill");
+    var val = document.getElementById("meter-value");
+    var sub = document.getElementById("meter-sub");
+    if(!fill || !val || !sub) return; // la pestaña Retos aún no está montada
+    var total = tasksCache.length;
+    var done = tasksCache.filter(function(t){ return t.done; }).length;
+    var pct = total ? Math.round((done/total)*100) : 0;
+    fill.style.width = pct + "%";
+    val.textContent = pct + "%";
+    sub.textContent = total ? (done + " de " + total + " tareas completadas") : "Todavía no tienes tareas.";
   }
 
   function subscribeColors(){
@@ -585,7 +651,7 @@ const db = getFirestore(app);
       +   '<div class="meta"><span class="pill" style="background:'+col+'22;color:'+col+';border-color:'+col+'55;">'+esc(a.course||"Sin asignatura")+'</span><span class="when">'+esc(when)+'</span></div>'
       + '</div><label class="checkline mark-read"><input type="checkbox" data-avid="'+esc(a.id)+'" '+(a.leido?"checked":"")+'> Leído</label></div>'
       + (a.message ? '<div class="msg">'+esc(a.message)+'</div>' : '')
-      + (a.url ? '<a class="link" href="'+esc(a.url)+'" target="_blank" rel="noopener">Ver en Canvas ↗</a>' : '')
+      + (a.url ? '<a class="link" href="'+esc(a.url)+'" target="_blank" rel="noopener">Ver en '+(PLATAFORMA[myEmail]||"Canvas")+' ↗</a>' : '')
       + '</div>';
   }
 
@@ -594,7 +660,7 @@ const db = getFirestore(app);
     var q = query(collection(db,"users",myEmail,"tasks"), orderBy("due_at","asc"), limit(500));
     onSnapshot(q, function(qs){
       tasksCache = []; qs.forEach(function(d){ var o=d.data(); o.id=d.id; tasksCache.push(o); });
-      renderTasks(); renderCalendar(); renderAgenda();
+      renderTasks(); renderCalendar(); renderAgenda(); renderTaskProgress();
     }, function(err){ document.getElementById("tasks-list").innerHTML = '<div style="color:red">ERROR: ' + err.message + '</div>'; });
   }
   document.getElementById("hide-done").addEventListener("change", function(){
@@ -635,7 +701,7 @@ const db = getFirestore(app);
     var dueLabel = "";
     if(t.due_at){ var d=new Date(t.due_at); var hh=d.getHours(),mm=d.getMinutes(); dueLabel = fmtDateLabel(d)+((hh||mm)?(" · "+pad(hh)+":"+pad(mm)):""); }
     var dueClass = bucketKey==="vencidas"?"urgent":(bucketKey==="hoy"||bucketKey==="manana"?"soon":"");
-    var link = t.url ? '<a class="task-link" href="'+esc(t.url)+'" target="_blank" rel="noopener">Ver en Canvas ↗</a>' : "";
+    var link = t.url ? '<a class="task-link" href="'+esc(t.url)+'" target="_blank" rel="noopener">Ver en '+(PLATAFORMA[myEmail]||"Canvas")+' ↗</a>' : "";
     return '<div class="task-row '+(t.done?"done":"")+'" data-id="'+esc(t.id)+'">'
       + '<input type="checkbox" data-id="'+esc(t.id)+'" '+(t.done?"checked":"")+'>'
       + '<div class="task-main"><div class="task-title">'+esc(t.title||"(sin título)")+'</div>'
