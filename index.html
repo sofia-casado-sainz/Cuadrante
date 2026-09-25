@@ -497,6 +497,9 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     // pestaña se queda en ese mismo punto de scroll — y si tiene menos contenido,
     // parece que "se come" todo por arriba. Al cambiar de pestaña, siempre arriba del todo.
     window.scrollTo(0, 0);
+    // Revisamos el botón de avisos cada vez que se cambia de pestaña (no solo al abrir
+    // la app), para que si el estado real cambió se refleje sin tener que recargar.
+    if(typeof refreshPushButton === "function") refreshPushButton();
   }
   tabs.forEach(function(btn){
     btn.addEventListener("click", function(){
@@ -1186,12 +1189,21 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
   }
   function refreshPushButton(){
     var btn = document.getElementById("enable-push");
+    if(!btn) return;
     if(!("serviceWorker" in navigator) || !("PushManager" in window)){ btn.style.display = "none"; return; }
-    if(Notification.permission !== "granted") return;
-    navigator.serviceWorker.getRegistration().then(function(reg){
-      return reg && reg.pushManager.getSubscription();
+    if(Notification.permission !== "granted"){
+      btn.textContent = "🔔 Activar avisos"; btn.disabled = false;
+      return;
+    }
+    // Antes usábamos getRegistration(), pero recién abierta la app en el iPhone a veces
+    // todavía no "ve" el service worker (aunque siga activo) y el botón se quedaba mal.
+    // register() es idempotente: si ya estaba registrado, devuelve ese mismo registro sin
+    // reinstalar nada, así que es una forma más fiable de comprobar la suscripción actual.
+    navigator.serviceWorker.register("sw.js").then(function(reg){
+      return reg.pushManager.getSubscription();
     }).then(function(sub){
       if(sub){ btn.textContent = "🔔 Avisos activados"; btn.disabled = true; }
+      else{ btn.textContent = "🔔 Activar avisos"; btn.disabled = false; }
     }).catch(function(){});
   }
   function enablePush(){
