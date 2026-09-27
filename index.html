@@ -1213,13 +1213,34 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
   document.querySelectorAll("#sched-days .day-chip input").forEach(function(cb){
     cb.addEventListener("change", function(){ cb.closest(".day-chip").classList.toggle("checked", cb.checked); });
   });
-  // Además del aviso al guardar, el propio selector de hora de fin no deja elegir una
-  // hora anterior a la de inicio (así se ve al momento, sin esperar a enviar el formulario).
-  document.getElementById("sched-start").addEventListener("change", function(){
-    document.getElementById("sched-end").min = this.value;
-  });
-  document.getElementById("edit-sched-start").addEventListener("change", function(){
-    document.getElementById("edit-sched-end").min = this.value;
+  // Al poner la hora de inicio, la de fin se pone sola media hora más tarde (se puede
+  // cambiar después si la clase dura más) — y además el propio selector de hora de fin
+  // ya no deja elegir una hora anterior a la de inicio, así que no hace falta esperar
+  // al aviso de "tiene que ser posterior" al guardar.
+  function addMinutesToTime(hhmm, mins){
+    var total = toMinutes(hhmm) + mins;
+    if(total > 23*60+59) total = 23*60+59; // no cruzamos la medianoche
+    if(total < 0) total = 0;
+    return pad(Math.floor(total/60)) + ":" + pad(total%60);
+  }
+  function ajustarFinAlCambiarInicio(startEl, endEl){
+    endEl.value = addMinutesToTime(startEl.value, 30);
+    endEl.min = startEl.value;
+  }
+  // Por si acaso se cuela una hora de fin igual o anterior a la de inicio (p. ej.
+  // escribiéndola a mano en vez de con el selector), la corregimos también aquí,
+  // aparte del "min" del campo y del aviso que ya había al guardar.
+  function corregirFinSiInvalido(startEl, endEl){
+    if(!startEl.value || !endEl.value) return;
+    if(toMinutes(endEl.value) <= toMinutes(startEl.value)){
+      endEl.value = addMinutesToTime(startEl.value, 30);
+    }
+  }
+  ["input","change"].forEach(function(evt){
+    document.getElementById("sched-start").addEventListener(evt, function(){ ajustarFinAlCambiarInicio(this, document.getElementById("sched-end")); });
+    document.getElementById("edit-sched-start").addEventListener(evt, function(){ ajustarFinAlCambiarInicio(this, document.getElementById("edit-sched-end")); });
+    document.getElementById("sched-end").addEventListener(evt, function(){ corregirFinSiInvalido(document.getElementById("sched-start"), this); });
+    document.getElementById("edit-sched-end").addEventListener(evt, function(){ corregirFinSiInvalido(document.getElementById("edit-sched-start"), this); });
   });
   document.getElementById("sched-end").min = document.getElementById("sched-start").value;
 
