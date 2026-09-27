@@ -56,13 +56,21 @@
   .brand h1{ font-size:26px; font-weight:600; letter-spacing:-0.01em; }
   .brand .sub{ font-size:12px; color:var(--ink-faint); }
   #signout{ font-size:11.5px; color:var(--ink-faint); background:none; border:none; cursor:pointer; text-decoration:underline; }
-  nav.tabs{ display:flex; gap:4px; margin-top:14px; overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; }
+  /* Antes esto desbordaba hacia los lados y había que arrastrar para ver "Retos" y
+     "Novedades" — ahora, en vez de desbordar, el menú pasa a una segunda (o tercera)
+     fila si no cabe entero en el ancho de la pantalla, así que siempre se ve completo
+     sin tener que moverlo, sea móvil, tablet o lo que sea. */
+  nav.tabs{ display:flex; flex-wrap:wrap; gap:6px 4px; margin-top:14px; }
   nav.tabs button{
     font-family:inherit; font-size:13.5px; font-weight:500; color:var(--ink-dim); background:transparent;
-    border:1px solid transparent; padding:8px 13px; border-radius:9px; cursor:pointer; white-space:nowrap;
+    border:1px solid transparent; padding:8px 13px; border-radius:9px; cursor:pointer; white-space:nowrap; flex:0 0 auto;
   }
   nav.tabs button.active{ background:var(--accent); color:#fff; }
   nav.tabs button:not(.active):hover{ background:var(--surface-2); color:var(--ink); }
+  @media (max-width:480px){
+    nav.tabs{ gap:5px 4px; }
+    nav.tabs button{ font-size:12.5px; padding:7px 10px; }
+  }
 
   main{ max-width:760px; margin:16px auto 0; }
   section.view{ display:none; }
@@ -344,7 +352,10 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Retos</h2>
-        <span class="pill" id="racha-badge" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);">🔥 0 días</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="pill" id="racha-badge" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);">🔥 0 días</span>
+          <span class="pill" id="racha-badge-otro" style="display:none;background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);"></span>
+        </div>
       </div>
       <div id="reto-content"><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div></div>
       <button class="btn primary small" id="reto-hecho-btn" type="button" style="margin-top:14px;">Marcar hecho hoy</button>
@@ -728,6 +739,7 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     renderCalendar();
     loadRetoDelDia();
     subscribeRacha();
+    subscribeRachaOtro();
     loadNewsletter();
     loadCursos();
   }
@@ -763,6 +775,26 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
       renderRacha();
     });
   }
+  // La racha de la otra persona se lee de su propio documento meta/retos. Las reglas
+  // de Firestore dejan LEER (nunca escribir) ese documento concreto a cualquiera que
+  // haya iniciado sesión en la app — el resto de su espacio sigue siendo privado.
+  // OJO: se calcula dentro de la función (no al cargar el script), porque hasta que
+  // no se inicia sesión no se sabe todavía quién es "myEmail".
+  var otherEmail = null;
+  var otraRachaCache = null; // null = todavía no se sabe; false = no se pudo leer (permiso)
+  function subscribeRachaOtro(){
+    otherEmail = ALLOWED_EMAILS.filter(function(e){ return e !== myEmail; })[0] || null;
+    if(!otherEmail) return;
+    onSnapshot(doc(db,"users",otherEmail,"meta","retos"), function(snap){
+      otraRachaCache = snap.exists() ? snap.data() : { racha: 0, ultimo_dia: null };
+      renderRacha();
+    }, function(err){
+      // Lo más probable es que todavía no se hayan actualizado las reglas de
+      // Firestore en la consola de Firebase — no rompemos nada, solo no la mostramos.
+      otraRachaCache = false;
+      renderRacha();
+    });
+  }
   function renderRacha(){
     var badge = document.getElementById("racha-badge");
     var btn = document.getElementById("reto-hecho-btn");
@@ -770,9 +802,21 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     var hoy = todayKey();
     var hechoHoy = rachaCache.ultimo_dia === hoy;
     var n = rachaCache.racha || 0;
-    badge.textContent = "🔥 " + n + (n === 1 ? " día" : " días");
+    badge.textContent = "Tú: 🔥 " + n + (n === 1 ? " día" : " días");
     btn.textContent = hechoHoy ? "✓ Hecho hoy" : "Marcar hecho hoy";
     btn.disabled = hechoHoy;
+
+    var badgeOtro = document.getElementById("racha-badge-otro");
+    if(badgeOtro && otherEmail){
+      if(otraRachaCache && otraRachaCache !== false){
+        var n2 = otraRachaCache.racha || 0;
+        var etiqueta = UNIVERSIDAD[otherEmail] || "La otra persona";
+        badgeOtro.textContent = etiqueta + ": 🔥 " + n2 + (n2 === 1 ? " día" : " días");
+        badgeOtro.style.display = "";
+      } else {
+        badgeOtro.style.display = "none";
+      }
+    }
   }
   function yesterdayKey(){
     var t = startOfDay(new Date());
