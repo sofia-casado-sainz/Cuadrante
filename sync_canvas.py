@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-Sincroniza tareas y avisos de Canvas con Firestore.
+Sincroniza tareas y avisos de Canvas con Firestore, para UNA O VARIAS personas
+de UFV a la vez (todas comparten el mismo Canvas de universidad, pero cada una
+tiene su propio token personal).
 Pensado para correr desde GitHub Actions con un cron, pero funciona igual en local.
 
 Variables de entorno necesarias:
-  CANVAS_DOMAIN        ej. "ufv-es.instructure.com"
-  CANVAS_TOKEN          tu token de acceso personal de Canvas
+  CANVAS_DOMAIN         ej. "ufv-es.instructure.com" (una sola, la comparten todas)
+  CANVAS_USERS          JSON con {"email@alumnos.ufv.es": "token_de_esa_persona", ...}
+                         — una entrada por cada persona a sincronizar (incluida tú).
+                         Para añadir a alguien nuevo, o renovar un token caducado,
+                         solo hay que editar este secreto en GitHub — nunca este archivo.
   FIREBASE_CREDENTIALS  el JSON completo de la cuenta de servicio de Firebase (como texto)
 """
 
@@ -22,50 +27,21 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from pywebpush import webpush, WebPushException
 
-# Ya no hace falta mantener esta lista a mano: cada sincronización pregunta a Canvas
-# qué asignaturas tienes marcadas con la estrella de favorito en el dashboard, y usa
-# esas (todas). Si algún cuatrimestre no tienes ninguna marcada, usa todas las
-# asignaturas activas como respaldo, para no quedarte sin tareas.
-def get_favorite_courses():
-    favs = get_all_pages(f"{BASE}/users/self/favorites/courses", params={"per_page": 100})
-    if not favs:
-        favs = get_all_pages(f"{BASE}/courses", params={"per_page": 100, "enrollment_state": "active"})
-    course_map = {}
-    for c in favs:
-        cid = c.get("id")
-        if not cid:
-            continue
-        name = c.get("name") or c.get("course_code") or f"Curso {cid}"
-        course_map[f"course_{cid}"] = clean_title(name)
-    return course_map
-
 DOMAIN = os.environ["CANVAS_DOMAIN"]
-TOKEN = os.environ["CANVAS_TOKEN"]
 BASE = f"https://{DOMAIN}/api/v1"
-SESSION = requests.Session()
-SESSION.headers.update({"Authorization": f"Bearer {TOKEN}"})
 
 # Avisos push (opcional: si no rellenas VAPID_PRIVATE_KEY como secreto de GitHub, esto no hace nada)
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_CLAIMS_SUB = "mailto:9206029@alumnos.ufv.es"
-APP_URL = "https://sofia-casado-sainz.github.io/cuadrante/"
-
-# La app ahora admite más de una persona (cada una con su propio login). Cada robot de
-# sincronización escribe solo dentro del espacio de datos de SU dueño, en
-# users/{OWNER_EMAIL}/... de Firestore. Este script es el de Canvas/UFV, así que usa tu email:
-OWNER_EMAIL = "9206029@alumnos.ufv.es"
+# RELLENA con la URL real de tu GitHub Pages (Paso 5 del README), p.ej. "https://tu-usuario.github.io/cuadrante/"
+APP_URL = "https://TU-USUARIO.github.io/cuadrante/"
 
 
-def user_ref(db):
-    """Documento raíz del dueño de este script dentro de Firestore (users/{email})."""
-    return db.collection("users").document(OWNER_EMAIL)
-
-
-def get_all_pages(url, params=None):
+def get_all_pages(session, url, params=None):
     """Sigue la paginación de Canvas (cabecera Link) y devuelve todos los resultados."""
     items = []
     while url:
-        resp = SESSION.get(url, params=params, timeout=30)
+        resp = session.get(url, params=params, timeout=30)
         resp.raise_for_status()
         items.extend(resp.json())
         params = None  # los parámetros ya van en la URL "next"
@@ -121,191 +97,267 @@ class ChunkedBatch:
             self.pending = 0
 
 
-def sync_tasks(db, course_map):
-    today = datetime.now(timezone.utc).date()
-    start = (today - timedelta(days=14)).isoformat()
-    end = (today + timedelta(days=180)).isoformat()
+class UserSync:
+    """Agrupa todo lo necesario para sincronizar UNA persona: su sesión de Canvas
+    (con su propio token) y su carpeta en Firestore (users/{email}/...). La app
+    admite varias personas, cada una con su propio login; cada una tiene su propio
+    UserSync, y cada UserSync solo lee su Canvas y solo escribe su propia carpeta."""
 
-    items = get_all_pages(
-        f"{BASE}/planner/items",
-        params={"per_page": 100, "start_date": start, "end_date": end},
-    )
+    def __init__(self, db, owner_email, token):
+        self.db = db
+        self.owner_email = owner_email
+        self.session = requests.Session()
+        self.session.headers.update({"Authorization": f"Bearer {token}"})
 
-    tasks_coll = user_ref(db).collection("tasks")
-    existing = {d.id: d.to_dict() for d in tasks_coll.stream()}
+    def user_ref(self):
+        return self.db.collection("users").document(self.owner_email)
 
-    batch = ChunkedBatch(db)
-    count = 0
-    new_count = 0
-    new_tasks = []
-    now_iso = datetime.now(timezone.utc).isoformat()
+    def get_all_pages(self, url, params=None):
+        return get_all_pages(self.session, url, params=params)
 
-    for it in items:
-        ptype = it.get("plannable_type")
-        if ptype not in ("assignment", "quiz", "discussion_topic"):
-            continue
-        course_key = f"course_{it.get('course_id')}"
-        if course_key not in course_map:
-            continue
+    # Ya no hace falta mantener esta lista a mano: cada sincronización pregunta a
+    # Canvas qué asignaturas tiene esa persona marcadas con la estrella de favorito
+    # en el dashboard, y usa esas (todas). Si algún cuatrimestre no tiene ninguna
+    # marcada, usa todas las asignaturas activas como respaldo, para no quedarse
+    # sin tareas.
+    def get_favorite_courses(self):
+        favs = self.get_all_pages(f"{BASE}/users/self/favorites/courses", params={"per_page": 100})
+        if not favs:
+            favs = self.get_all_pages(f"{BASE}/courses", params={"per_page": 100, "enrollment_state": "active"})
+        course_map = {}
+        for c in favs:
+            cid = c.get("id")
+            if not cid:
+                continue
+            name = c.get("name") or c.get("course_code") or f"Curso {cid}"
+            course_map[f"course_{cid}"] = clean_title(name)
+        return course_map
 
-        plannable = it.get("plannable") or {}
-        plannable_id = it.get("plannable_id")
-        doc_id = f"t-{ptype}-{plannable_id}"
-        title = clean_title(plannable.get("title") or plannable.get("name") or "(sin título)")
-        due_at = it.get("plannable_date")
-        url = it.get("html_url", "")
-        submitted = bool((it.get("submissions") or {}).get("submitted"))
+    def sync_tasks(self, course_map):
+        today = datetime.now(timezone.utc).date()
+        start = (today - timedelta(days=14)).isoformat()
+        end = (today + timedelta(days=180)).isoformat()
 
-        ref = tasks_coll.document(doc_id)
-        count += 1
+        items = self.get_all_pages(
+            f"{BASE}/planner/items",
+            params={"per_page": 100, "start_date": start, "end_date": end},
+        )
 
-        if doc_id in existing:
-            update = {
-                "title": title,
-                "due_at": due_at,
-                "url": url,
-                "course": course_map[course_key],
-                "updated_at": now_iso,
-            }
-            if submitted:
-                update["done"] = True
-            batch.update(ref, update)
-        else:
-            new_count += 1
-            new_tasks.append({"title": title, "course": course_map[course_key]})
-            batch.set(ref, {
-                "title": title,
-                "course": course_map[course_key],
-                "due_at": due_at,
-                "url": url,
-                "type": ptype,
-                "source": "canvas",
-                "done": submitted,
-                "updated_at": now_iso,
-            })
+        tasks_coll = self.user_ref().collection("tasks")
+        existing = {d.id: d.to_dict() for d in tasks_coll.stream()}
 
-    batch.set(user_ref(db).collection("meta").document("sync"), {
-        "tasks_last_sync": now_iso,
-        "tasks_found": count,
-    }, merge=True)
-    batch.commit()
-    print(f"Tareas: {count} procesadas, {new_count} nuevas.")
-    return new_tasks
+        batch = ChunkedBatch(self.db)
+        count = 0
+        new_count = 0
+        new_tasks = []
+        now_iso = datetime.now(timezone.utc).isoformat()
 
+        for it in items:
+            ptype = it.get("plannable_type")
+            if ptype not in ("assignment", "quiz", "discussion_topic"):
+                continue
+            course_key = f"course_{it.get('course_id')}"
+            if course_key not in course_map:
+                continue
 
-def send_push_to_all(db, title, body, url):
-    """Manda un aviso push a todos los dispositivos suscritos por el dueño de este script."""
-    if not VAPID_PRIVATE_KEY:
-        return
-    subs = list(user_ref(db).collection("pushSubscriptions").stream())
-    if not subs:
-        return
-    payload = json.dumps({"title": title, "body": body, "url": url})
-    for sdoc in subs:
-        s = sdoc.to_dict() or {}
-        sub_info = {"endpoint": s.get("endpoint"), "keys": s.get("keys", {})}
-        try:
-            webpush(
-                subscription_info=sub_info,
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": VAPID_CLAIMS_SUB},
-            )
-        except WebPushException as e:
-            status = getattr(e.response, "status_code", None)
-            if status in (404, 410):
-                sdoc.reference.delete()
+            plannable = it.get("plannable") or {}
+            plannable_id = it.get("plannable_id")
+            doc_id = f"t-{ptype}-{plannable_id}"
+            title = clean_title(plannable.get("title") or plannable.get("name") or "(sin título)")
+            due_at = it.get("plannable_date")
+            url = it.get("html_url", "")
+            submitted = bool((it.get("submissions") or {}).get("submitted"))
+
+            ref = tasks_coll.document(doc_id)
+            count += 1
+
+            if doc_id in existing:
+                update = {
+                    "title": title,
+                    "due_at": due_at,
+                    "url": url,
+                    "course": course_map[course_key],
+                    "updated_at": now_iso,
+                }
+                if submitted:
+                    update["done"] = True
+                batch.update(ref, update)
             else:
-                print(f"Aviso: no se pudo mandar push a {sdoc.id}: {e}", file=sys.stderr)
+                new_count += 1
+                new_tasks.append({"title": title, "course": course_map[course_key]})
+                batch.set(ref, {
+                    "title": title,
+                    "course": course_map[course_key],
+                    "due_at": due_at,
+                    "url": url,
+                    "type": ptype,
+                    "source": "canvas",
+                    "done": submitted,
+                    "updated_at": now_iso,
+                })
+
+        batch.set(self.user_ref().collection("meta").document("sync"), {
+            "tasks_last_sync": now_iso,
+            "tasks_found": count,
+        }, merge=True)
+        batch.commit()
+        print(f"  Tareas: {count} procesadas, {new_count} nuevas.")
+        return new_tasks
+
+    def send_push_to_all(self, title, body, url):
+        """Manda un aviso push a todos los dispositivos suscritos por esta persona."""
+        if not VAPID_PRIVATE_KEY:
+            return
+        subs = list(self.user_ref().collection("pushSubscriptions").stream())
+        if not subs:
+            return
+        payload = json.dumps({"title": title, "body": body, "url": url})
+        for sdoc in subs:
+            s = sdoc.to_dict() or {}
+            sub_info = {"endpoint": s.get("endpoint"), "keys": s.get("keys", {})}
+            try:
+                webpush(
+                    subscription_info=sub_info,
+                    data=payload,
+                    vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": VAPID_CLAIMS_SUB},
+                )
+            except WebPushException as e:
+                status = getattr(e.response, "status_code", None)
+                if status in (404, 410):
+                    # la suscripción ya no existe (desinstalada, permiso revocado...) - la limpiamos
+                    sdoc.reference.delete()
+                else:
+                    print(f"  Aviso: no se pudo mandar push a {sdoc.id}: {e}", file=sys.stderr)
+
+    def maybe_notify_due_today(self):
+        """Una vez al día (a partir de las 8:00 hora de Madrid), avisa de las tareas que vencen hoy."""
+        madrid_now = datetime.now(ZoneInfo("Europe/Madrid"))
+        if madrid_now.hour < 8:
+            return
+        today_str = madrid_now.date().isoformat()
+
+        meta_ref = self.user_ref().collection("meta").document("sync")
+        meta = meta_ref.get().to_dict() or {}
+        if meta.get("due_today_notified_date") == today_str:
+            return
+
+        due_today = []
+        for d in self.user_ref().collection("tasks").stream():
+            t = d.to_dict() or {}
+            if t.get("done"):
+                continue
+            due_at = t.get("due_at")
+            if not due_at:
+                continue
+            try:
+                due_local = datetime.fromisoformat(due_at.replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Madrid"))
+            except Exception:
+                continue
+            if due_local.date().isoformat() == today_str:
+                due_today.append(t.get("title", "(sin título)"))
+
+        meta_ref.set({"due_today_notified_date": today_str}, merge=True)
+
+        if due_today:
+            body = ", ".join(due_today[:5])
+            if len(due_today) > 5:
+                body += f" y {len(due_today) - 5} más"
+            self.send_push_to_all("📅 Entregas de hoy", body, APP_URL)
+
+    def sync_avisos(self, course_map):
+        today = datetime.now(timezone.utc).date()
+        start = (today - timedelta(days=60)).isoformat()
+
+        params = [("per_page", 100), ("start_date", start)]
+        for course_key in course_map:
+            params.append(("context_codes[]", course_key))
+
+        items = self.get_all_pages(f"{BASE}/announcements", params=params)
+
+        avisos_coll = self.user_ref().collection("avisos")
+        existing_ids = {d.id for d in avisos_coll.stream()}
+
+        batch = ChunkedBatch(self.db)
+        count = 0
+        new_count = 0
+        new_avisos = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        for it in items:
+            aviso_id = it.get("id")
+            doc_id = f"a-{aviso_id}"
+            course_key = it.get("context_code", "")
+            course = course_map.get(course_key, "")
+
+            ref = avisos_coll.document(doc_id)
+            count += 1
+            data = {
+                "title": it.get("title", "(sin título)"),
+                "message": strip_html(it.get("message", "")),
+                "course": course,
+                "url": it.get("html_url", ""),
+                "posted_at": it.get("posted_at"),
+            }
+
+            if doc_id in existing_ids:
+                batch.update(ref, data)
+            else:
+                new_count += 1
+                new_avisos.append({"title": data["title"], "course": course})
+                data["leido"] = False
+                data["updated_at"] = now_iso
+                batch.set(ref, data)
+
+        batch.set(self.user_ref().collection("meta").document("sync"), {
+            "avisos_last_sync": now_iso,
+            "avisos_found": count,
+        }, merge=True)
+        batch.commit()
+        print(f"  Avisos: {count} procesados, {new_count} nuevos.")
+        return new_avisos
+
+    def run(self):
+        course_map = self.get_favorite_courses()
+        new_tasks = self.sync_tasks(course_map)
+        new_avisos = self.sync_avisos(course_map)
+
+        if new_tasks:
+            body = ", ".join(t["title"] for t in new_tasks[:5])
+            if len(new_tasks) > 5:
+                body += f" y {len(new_tasks) - 5} más"
+            self.send_push_to_all(f"📚 {len(new_tasks)} tarea(s) nueva(s)", body, APP_URL)
+
+        if new_avisos:
+            body = ", ".join(a["title"] for a in new_avisos[:5])
+            if len(new_avisos) > 5:
+                body += f" y {len(new_avisos) - 5} más"
+            self.send_push_to_all(f"📣 {len(new_avisos)} aviso(s) nuevo(s)", body, APP_URL)
+
+        self.maybe_notify_due_today()
 
 
-def maybe_notify_due_today(db):
-    """Una vez al día (a partir de las 8:00 hora de Madrid), avisa de las tareas que vencen hoy."""
-    madrid_now = datetime.now(ZoneInfo("Europe/Madrid"))
-    if madrid_now.hour < 8:
-        return
-    today_str = madrid_now.date().isoformat()
-
-    meta_ref = user_ref(db).collection("meta").document("sync")
-    meta = meta_ref.get().to_dict() or {}
-    if meta.get("due_today_notified_date") == today_str:
-        return
-
-    due_today = []
-    for d in user_ref(db).collection("tasks").stream():
-        t = d.to_dict() or {}
-        if t.get("done"):
-            continue
-        due_at = t.get("due_at")
-        if not due_at:
-            continue
-        try:
-            due_local = datetime.fromisoformat(due_at.replace("Z", "+00:00")).astimezone(ZoneInfo("Europe/Madrid"))
-        except Exception:
-            continue
-        if due_local.date().isoformat() == today_str:
-            due_today.append(t.get("title", "(sin título)"))
-
-    meta_ref.set({"due_today_notified_date": today_str}, merge=True)
-
-    if due_today:
-        body = ", ".join(due_today[:5])
-        if len(due_today) > 5:
-            body += f" y {len(due_today) - 5} más"
-        send_push_to_all(db, "📅 Entregas de hoy", body, APP_URL)
-
-
-def sync_avisos(db, course_map):
-    today = datetime.now(timezone.utc).date()
-    start = (today - timedelta(days=60)).isoformat()
-
-    params = [("per_page", 100), ("start_date", start)]
-    for course_key in course_map:
-        params.append(("context_codes[]", course_key))
-
-    items = get_all_pages(f"{BASE}/announcements", params=params)
-
-    avisos_coll = user_ref(db).collection("avisos")
-    existing_ids = {d.id for d in avisos_coll.stream()}
-
-    batch = ChunkedBatch(db)
-    count = 0
-    new_count = 0
-    new_avisos = []
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    for it in items:
-        aviso_id = it.get("id")
-        doc_id = f"a-{aviso_id}"
-        course_key = it.get("context_code", "")
-        course = course_map.get(course_key, "")
-
-        ref = avisos_coll.document(doc_id)
-        count += 1
-        data = {
-            "title": it.get("title", "(sin título)"),
-            "message": strip_html(it.get("message", "")),
-            "course": course,
-            "url": it.get("html_url", ""),
-            "posted_at": it.get("posted_at"),
-        }
-
-        if doc_id in existing_ids:
-            batch.update(ref, data)
-        else:
-            new_count += 1
-            new_avisos.append({"title": data["title"], "course": course})
-            data["leido"] = False
-            data["updated_at"] = now_iso
-            batch.set(ref, data)
-
-    batch.set(user_ref(db).collection("meta").document("sync"), {
-        "avisos_last_sync": now_iso,
-        "avisos_found": count,
-    }, merge=True)
-    batch.commit()
-    print(f"Avisos: {count} procesados, {new_count} nuevos.")
-    return new_avisos
+def cargar_usuarios():
+    """
+    Lee a quién hay que sincronizar desde el secreto CANVAS_USERS: un JSON tipo
+    {"email@alumnos.ufv.es": "token_de_esa_persona", ...} — una entrada por persona,
+    incluida tú. Para añadir a alguien nuevo, o renovar un token caducado, solo hace
+    falta editar ese secreto en GitHub (Settings → Secrets and variables → Actions) —
+    nunca este archivo ni el chat.
+    """
+    raw = os.environ.get("CANVAS_USERS")
+    if not raw:
+        raise RuntimeError(
+            "No hay secreto CANVAS_USERS configurado en GitHub "
+            "(Settings → Secrets and variables → Actions) — no hay a quién sincronizar."
+        )
+    try:
+        usuarios = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"CANVAS_USERS no es JSON válido: {e}")
+    if not isinstance(usuarios, dict) or not usuarios:
+        raise RuntimeError('CANVAS_USERS debe ser un objeto JSON tipo {"email": "token", ...} con al menos una persona')
+    return usuarios
 
 
 def main():
@@ -314,28 +366,26 @@ def main():
     firebase_admin.initialize_app(cred)
     db = firestore.client()
 
-    course_map = get_favorite_courses()
-    new_tasks = sync_tasks(db, course_map)
-    new_avisos = sync_avisos(db, course_map)
+    usuarios = cargar_usuarios()
+    print(f"Sincronizando {len(usuarios)} persona(s).")
 
-    if new_tasks:
-        body = ", ".join(t["title"] for t in new_tasks[:5])
-        if len(new_tasks) > 5:
-            body += f" y {len(new_tasks) - 5} más"
-        send_push_to_all(db, f"📚 {len(new_tasks)} tarea(s) nueva(s)", body, APP_URL)
+    hubo_error = False
+    for email, token in usuarios.items():
+        print(f"--- {email} ---")
+        try:
+            UserSync(db, email, token).run()
+        except requests.HTTPError as e:
+            hubo_error = True
+            print(f"  Error llamando a Canvas para {email}: {e}", file=sys.stderr)
+        except Exception as e:
+            hubo_error = True
+            print(f"  Error sincronizando a {email}: {e}", file=sys.stderr)
 
-    if new_avisos:
-        body = ", ".join(a["title"] for a in new_avisos[:5])
-        if len(new_avisos) > 5:
-            body += f" y {len(new_avisos) - 5} más"
-        send_push_to_all(db, f"📣 {len(new_avisos)} aviso(s) nuevo(s)", body, APP_URL)
-
-    maybe_notify_due_today(db)
+    if hubo_error:
+        # Un fallo en UNA persona (token caducado, etc.) no impide sincronizar al resto,
+        # pero sí queremos que la Action se marque en rojo para que alguien lo note.
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except requests.HTTPError as e:
-        print(f"Error llamando a Canvas: {e}", file=sys.stderr)
-        sys.exit(1)
+    main()
