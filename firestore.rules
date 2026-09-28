@@ -1,9 +1,37 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Cada persona solo puede leer y escribir dentro de su propio espacio:
+    // users/{su-email}/... El email se compara contra el que Firebase Authentication
+    // puso en su token al iniciar sesión, así que no se puede falsear desde el cliente.
     match /users/{userEmail}/{document=**} {
       allow read, write: if request.auth != null
         && request.auth.token.email == userEmail;
+    }
+
+    // Racha de retos: es lo único que cada persona deja ver a la otra, para poder
+    // comparar rachas entre las dos. Solo se abre la LECTURA de este documento
+    // concreto (nunca la escritura, que sigue exigiendo ser su dueña, por la regla
+    // de arriba) a cualquiera que haya iniciado sesión en la app — el resto de
+    // users/{userEmail}/... (tareas, avisos, horario, etc.) sigue siendo privado.
+    match /users/{userEmail}/meta/retos {
+      allow read: if request.auth != null;
+    }
+
+    // Catálogo compartido de retos de hábitos saludables: lo puede leer
+    // cualquier persona que haya iniciado sesión (da igual de qué cuenta),
+    // pero solo lo escribe el robot de GitHub Actions (con la clave de
+    // administrador, que se salta estas reglas), nunca la app desde el móvil.
+    match /retos/{retoId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Newsletter semanal compartida: mismo caso que los retos — la lee
+    // cualquiera que haya iniciado sesión, solo la escribe el robot.
+    match /newsletter/{doc} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

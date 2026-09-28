@@ -205,8 +205,10 @@
     <input id="login-email" type="email" placeholder="Tu email" required>
     <input id="login-password" type="password" placeholder="Contraseña" required>
     <button class="btn primary" type="submit">Entrar</button>
+    <button type="button" id="forgot-password-btn" style="background:none;border:none;color:var(--ink-dim);font-size:12.5px;text-decoration:underline;cursor:pointer;padding:4px;">¿Olvidaste tu contraseña?</button>
   </form>
   <p id="gate-error" class="muted" style="color:var(--red);"></p>
+  <p id="gate-info" class="muted" style="color:var(--green);"></p>
 </div>
 
 <div id="app">
@@ -354,7 +356,7 @@
         <h2>Retos</h2>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <span class="pill" id="racha-badge" style="background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);">🔥 0 días</span>
-          <span class="pill" id="racha-badge-otro" style="display:none;background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);"></span>
+          <span id="racha-list" style="display:contents;"></span>
         </div>
       </div>
       <div id="reto-content"><div class="skeleton" style="width:80%"></div><div class="skeleton" style="width:60%"></div></div>
@@ -391,7 +393,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   initializeFirestore, collection, doc, onSnapshot, query, orderBy, limit, getDocs, getDoc,
@@ -408,16 +410,25 @@ const firebaseConfig = {
   messagingSenderId: "865869614711",
   appId: "1:865869614711:web:9b77b3c66f1078598fc072"
 };
-// Solo esta cuenta puede iniciar sesión (se comprueba también en las reglas de Firestore):
-const ALLOWED_EMAILS = ["9206029@alumnos.ufv.es", "ana.ecenarro@edu.uah.es"];
+// Solo estas cuentas pueden iniciar sesión (se comprueba también en las reglas de Firestore):
+const ALLOWED_EMAILS = [
+  "9206029@alumnos.ufv.es", "ana.ecenarro@edu.uah.es",
+  "9301673@alumnos.ufv.es", "9300320@alumnos.ufv.es", "9305266@alumnos.ufv.es"
+];
 // El email de quien haya iniciado sesión ahora mismo (se rellena solo al entrar):
 var myEmail = null;
 // Cuentas que no tienen "Avisos" (Blackboard no trae anuncios, solo entregas, así que a esa
 // cuenta nunca le va a llegar nada ahí — mejor no mostrarle una pestaña que siempre está vacía):
 const SIN_AVISOS = ["ana.ecenarro@edu.uah.es"];
 // Para que los textos digan la universidad y la plataforma de cada una, no las de la otra:
-const UNIVERSIDAD = { "9206029@alumnos.ufv.es": "UFV", "ana.ecenarro@edu.uah.es": "UAH" };
-const PLATAFORMA  = { "9206029@alumnos.ufv.es": "Canvas", "ana.ecenarro@edu.uah.es": "Blackboard" };
+const UNIVERSIDAD = {
+  "9206029@alumnos.ufv.es": "UFV", "ana.ecenarro@edu.uah.es": "UAH",
+  "9301673@alumnos.ufv.es": "UFV", "9300320@alumnos.ufv.es": "UFV", "9305266@alumnos.ufv.es": "UFV"
+};
+const PLATAFORMA  = {
+  "9206029@alumnos.ufv.es": "Canvas", "ana.ecenarro@edu.uah.es": "Blackboard",
+  "9301673@alumnos.ufv.es": "Canvas", "9300320@alumnos.ufv.es": "Canvas", "9305266@alumnos.ufv.es": "Canvas"
+};
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
 // --------------------------------------------------------------------------------
@@ -585,6 +596,25 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     });
   });
   document.getElementById("signout").addEventListener("click", function(){ signOut(auth); });
+
+  // Para que cada persona pueda cambiar su propia contraseña sin que nadie más lo haga
+  // por ella: se manda un correo de restablecimiento al email que haya escrito en el
+  // formulario, con un enlace de Firebase para elegir una contraseña nueva. Nadie que
+  // no tenga acceso a ese buzón puede usar el enlace.
+  document.getElementById("forgot-password-btn").addEventListener("click", function(){
+    document.getElementById("gate-error").textContent = "";
+    document.getElementById("gate-info").textContent = "";
+    var email = document.getElementById("login-email").value.trim();
+    if(!email){
+      document.getElementById("gate-error").textContent = "Escribe primero tu email ahí arriba y luego pulsa aquí.";
+      return;
+    }
+    sendPasswordResetEmail(auth, email).then(function(){
+      document.getElementById("gate-info").textContent = "Te hemos mandado un correo a " + email + " con un enlace para elegir una contraseña nueva (revisa también spam).";
+    }).catch(function(err){
+      document.getElementById("gate-error").textContent = "No se pudo mandar el correo: " + err.message;
+    });
+  });
 
   function applyFeatureVisibility(){
     var avisosBtn = document.querySelector('nav.tabs button[data-tab="avisos"]');
@@ -775,24 +805,27 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
       renderRacha();
     });
   }
-  // La racha de la otra persona se lee de su propio documento meta/retos. Las reglas
+  // La racha de cada otra persona se lee de su propio documento meta/retos. Las reglas
   // de Firestore dejan LEER (nunca escribir) ese documento concreto a cualquiera que
   // haya iniciado sesión en la app — el resto de su espacio sigue siendo privado.
+  // Funciona igual para 1 amiga que para 10: recorre ALLOWED_EMAILS entero, así que
+  // añadir gente nueva a esa lista basta para que aparezca aquí sola, sin tocar nada más.
   // OJO: se calcula dentro de la función (no al cargar el script), porque hasta que
   // no se inicia sesión no se sabe todavía quién es "myEmail".
-  var otherEmail = null;
-  var otraRachaCache = null; // null = todavía no se sabe; false = no se pudo leer (permiso)
+  var otrosEmails = [];
+  var otrasRachasCache = {}; // email -> {racha, ultimo_dia} | false (sin permiso) | (ausente = aún cargando)
   function subscribeRachaOtro(){
-    otherEmail = ALLOWED_EMAILS.filter(function(e){ return e !== myEmail; })[0] || null;
-    if(!otherEmail) return;
-    onSnapshot(doc(db,"users",otherEmail,"meta","retos"), function(snap){
-      otraRachaCache = snap.exists() ? snap.data() : { racha: 0, ultimo_dia: null };
-      renderRacha();
-    }, function(err){
-      // Lo más probable es que todavía no se hayan actualizado las reglas de
-      // Firestore en la consola de Firebase — no rompemos nada, solo no la mostramos.
-      otraRachaCache = false;
-      renderRacha();
+    otrosEmails = ALLOWED_EMAILS.filter(function(e){ return e !== myEmail; });
+    otrosEmails.forEach(function(email){
+      onSnapshot(doc(db,"users",email,"meta","retos"), function(snap){
+        otrasRachasCache[email] = snap.exists() ? snap.data() : { racha: 0, ultimo_dia: null };
+        renderRacha();
+      }, function(err){
+        // Lo más probable es que todavía no se hayan actualizado las reglas de
+        // Firestore en la consola de Firebase — no rompemos nada, solo no la mostramos.
+        otrasRachasCache[email] = false;
+        renderRacha();
+      });
     });
   }
   function renderRacha(){
@@ -806,17 +839,21 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     btn.textContent = hechoHoy ? "✓ Hecho hoy" : "Marcar hecho hoy";
     btn.disabled = hechoHoy;
 
-    var badgeOtro = document.getElementById("racha-badge-otro");
-    if(badgeOtro && otherEmail){
-      if(otraRachaCache && otraRachaCache !== false){
-        var n2 = otraRachaCache.racha || 0;
-        var etiqueta = UNIVERSIDAD[otherEmail] || "La otra persona";
-        badgeOtro.textContent = etiqueta + ": 🔥 " + n2 + (n2 === 1 ? " día" : " días");
-        badgeOtro.style.display = "";
-      } else {
-        badgeOtro.style.display = "none";
-      }
-    }
+    var list = document.getElementById("racha-list");
+    if(!list) return;
+    list.innerHTML = "";
+    otrosEmails
+      .filter(function(email){ var d = otrasRachasCache[email]; return d && d !== false; })
+      .sort(function(a,b){ return (otrasRachasCache[b].racha||0) - (otrasRachasCache[a].racha||0); })
+      .forEach(function(email){
+        var n2 = otrasRachasCache[email].racha || 0;
+        var etiqueta = UNIVERSIDAD[email] || email;
+        var span = document.createElement("span");
+        span.className = "pill";
+        span.style.cssText = "background:var(--surface-2);color:var(--ink-dim);border-color:var(--border);";
+        span.textContent = etiqueta + ": 🔥 " + n2 + (n2 === 1 ? " día" : " días");
+        list.appendChild(span);
+      });
   }
   function yesterdayKey(){
     var t = startOfDay(new Date());
