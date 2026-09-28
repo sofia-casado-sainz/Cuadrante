@@ -1,7 +1,16 @@
 name: Sembrar catálogo de retos (una vez)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      borrar_catalogo_anterior:
+        description: "Borrar los retos que ya había antes de sembrar los nuevos (si eliges 'no', los nuevos se añaden mezclados con los de antes)"
+        required: false
+        default: "no"
+        type: choice
+        options:
+          - "no"
+          - "si"
 
 jobs:
   seed:
@@ -16,4 +25,5 @@ jobs:
       - name: Sembrar
         env:
           FIREBASE_CREDENTIALS: ${{ secrets.FIREBASE_CREDENTIALS }}
+          BORRAR_CATALOGO_ANTERIOR: ${{ github.event.inputs.borrar_catalogo_anterior }}
         run: python seed_retos.py

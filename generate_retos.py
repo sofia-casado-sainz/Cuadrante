@@ -85,13 +85,25 @@ def pedir_retos_a_gemini(existentes, cuantos):
     lista_existente = "\n".join(f"- {t}" for t in existentes[-200:])
 
     prompt = f"""Genera {cuantos} retos de hábitos saludables, en español de España, pensados
-para una persona universitaria. Cada reto debe:
-- ser una frase corta (máximo 15 palabras), en imperativo o muy directa
+para una persona universitaria. El tono tiene que ser GRACIOSO Y DIVERTIDO — como una
+broma cariñosa contigo misma —, no un consejo serio de coach de bienestar. Cada reto debe:
+- ser una frase corta (máximo 18 palabras), en imperativo o muy directa
 - empezar por UN emoji que encaje con el contenido
+- hacer sonreír o soltar una carcajada al leerlo, con humor absurdo, tierno o
+  autoparódico (nunca humor ofensivo, ni que dependa de burlarse de otra persona)
+- aun así, esconder detrás algo que de verdad ayuda a despejarse, relajarse o crear un
+  hábito saludable (moverse, respirar, dormir mejor, desconectar del móvil, comer
+  mejor, socializar, estudiar mejor...) — la broma es el envoltorio, el hábito sano es
+  el contenido
 - ser concreto y realizable en un solo día
 - cubrir temas variados: movimiento, alimentación, sueño, mente/mindfulness, uso del
   móvil y redes sociales, estudio/productividad, relaciones sociales, autocuidado,
   naturaleza
+
+Ejemplos del tono que buscamos (no los repitas, son solo para que veas el estilo):
+- "🕺 Baila el baile de la victoria aunque no hayas ganado nada todavía"
+- "🐢 Muévete a cámara lenta un minuto entero, como una tortuga zen"
+- "📵 Despide a tu móvil como si se fuera de viaje 2 horas"
 
 No repitas, ni siquiera parafraseado, ninguno de estos retos que ya existen en el catálogo:
 {lista_existente}

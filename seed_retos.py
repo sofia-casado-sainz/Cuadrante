@@ -25,115 +25,104 @@ from datetime import datetime, timezone
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# (categoria, texto) — frases cortas, en imperativo, con un emoji delante.
+# (categoria, texto) — frases cortas, graciosas, con un emoji delante. La broma es el
+# envoltorio; por dentro cada una esconde algo que de verdad ayuda a despejarse,
+# relajarse o crear un hábito saludable (moverse, respirar, dormir mejor, desconectar
+# del móvil, comer mejor, socializar, estudiar mejor...).
 SEED_RETOS = [
     # --- mañana ---
-    ("manana", "🌅 Despiértate 15 minutos antes y no mires el móvil hasta vestirte"),
-    ("manana", "🛏️ Haz la cama nada más levantarte"),
-    ("manana", "💧 Bebe un vaso de agua antes del café"),
-    ("manana", "🧘 Dedica 3 minutos a respirar hondo antes de empezar el día"),
-    ("manana", "☀️ Abre la ventana y deja entrar luz natural en cuanto te levantes"),
-    ("manana", "📝 Escribe las 3 cosas más importantes que quieres lograr hoy"),
-    ("manana", "🚿 Termina la ducha con 10 segundos de agua fría"),
-    ("manana", "🧴 Ponte crema solar aunque el plan de hoy sea quedarte en casa"),
-    ("manana", "🎵 Elige la música o el silencio con intención, no por costumbre"),
-    ("manana", "🙏 Piensa en algo que agradeces antes de salir de casa"),
+    ("manana", "🕺 Baila como si fueras famosa mientras se hace el café"),
+    ("manana", "🎤 Cántale a tu reflejo en el espejo como si fuera tu público"),
+    ("manana", "🦸 Ponte una capa imaginaria antes de salir de casa, aunque nadie lo sepa"),
+    ("manana", "🐸 Da tres saltos de rana nada más levantarte para despertar el cuerpo"),
+    ("manana", 'Saluda a alguien como si fueras de otra época: "buenos días tenga usted" 🎩'),
+    ("manana", "🥱 Bosteza exageradamente 5 veces seguidas — es contagioso y relaja la mandíbula"),
+    ("manana", "🧦 Ponte los calcetines más ridículos que tengas para arrancar el día sonriendo"),
+    ("manana", "☕ Bébete el café fingiendo que eres una crítica gastronómica muy exigente"),
     # --- movimiento ---
-    ("movimiento", "🚶 Camina al menos 20 minutos de un tirón hoy"),
-    ("movimiento", "🪜 Sube las escaleras en vez del ascensor todo el día"),
-    ("movimiento", "🧍 Levántate y estira cada hora si estudias sentado/a"),
-    ("movimiento", "🚴 Ve en bici o andando a algún sitio al que sueles ir en coche o bus"),
-    ("movimiento", "🤸 Haz 10 minutos de estiramientos antes de dormir"),
-    ("movimiento", "💪 Haz una tabla corta de fuerza: flexiones, sentadillas, plancha"),
-    ("movimiento", "🕺 Baila una canción entera, sin más excusa que apetecerte"),
-    ("movimiento", "📱 Camina mientras hablas por teléfono en vez de quedarte sentado/a"),
-    ("movimiento", "🧗 Prueba un tipo de ejercicio que nunca hayas hecho"),
-    ("movimiento", "🌳 Haz tu paseo o ejercicio de hoy al aire libre en vez de en un gimnasio"),
+    ("movimiento", "🕺 Baila una canción entera como si nadie te viera (aunque te vea el gato)"),
+    ("movimiento", "🚶 Camina imitando el andar de un personaje famoso durante un minuto"),
+    ("movimiento", "🦆 Haz el paseo del pato hasta la cocina, aunque parezca ridículo"),
+    ("movimiento", 'Haz el "baile de la victoria" aunque hoy no hayas ganado nada todavía 🏆'),
+    ("movimiento", "🥊 Da cuatro puñetazos al aire, como si boxearas contra el estrés del día"),
+    ("movimiento", "🐒 Estírate como un mono perezoso durante 2 minutos entre clase y clase"),
+    ("movimiento", "🧹 Haz playback con una escoba de micrófono con tu canción más animada"),
+    ("movimiento", "🐢 Muévete a cámara lenta un minuto entero, como una tortuga zen"),
     # --- alimentación ---
-    ("alimentacion", "🥗 Añade una ración extra de verdura a una de tus comidas"),
-    ("alimentacion", "🍎 Cambia un snack procesado por fruta hoy"),
-    ("alimentacion", "🍳 Desayuna algo con proteína en vez de solo hidratos"),
-    ("alimentacion", "🍽️ Come sin pantallas delante, prestando atención a lo que comes"),
-    ("alimentacion", "🥤 Sustituye un refresco por agua o infusión"),
-    ("alimentacion", "🍱 Prepara tu comida de mañana hoy, en vez de improvisar"),
-    ("alimentacion", "🍫 Si comes algo dulce, saboréalo despacio en vez de con prisa"),
-    ("alimentacion", "🛒 Haz la compra con una lista para evitar picoteo impulsivo"),
-    ("alimentacion", "🍌 Lleva contigo un snack saludable para no caer en la máquina expendedora"),
-    ("alimentacion", "🥦 Prueba una verdura o receta que no sueles comer"),
+    ("alimentacion", 'Preséntate a tu fruta antes de comértela: "hola, manzana, hoy te toca a ti" 🍎'),
+    ("alimentacion", "👨‍🍳 Cocina algo nuevo poniéndote un delantal imaginario de chef con estrella Michelin"),
+    ("alimentacion", "🍫 Saboréa un trozo de chocolate a cámara lenta, como en un anuncio de tele"),
+    ("alimentacion", "🥤 Bebe un vaso de agua brindando contigo misma por haber llegado hasta aquí"),
+    ("alimentacion", "🍽️ Come hoy con la mano contraria a la que usas siempre, y ríete del resultado"),
+    ("alimentacion", "🍌 Ponle una vocecilla graciosa a tu snack antes de comértelo, como si hablara"),
+    ("alimentacion", "🍉 Corta la fruta en formas raras, como si fueras repostera de concurso de tele"),
+    ("alimentacion", "🫖 Prepárate una infusión y bébetela despacio fingiendo que eres de la realeza"),
     # --- sueño ---
-    ("sueno", "😴 Apaga las pantallas 30 minutos antes de dormir"),
-    ("sueno", "🌙 Acuéstate a la misma hora que ayer, sin alargar la noche"),
-    ("sueno", "☕ No tomes cafeína después de las 5 de la tarde"),
-    ("sueno", "📵 Deja el móvil cargando fuera del alcance de la cama"),
-    ("sueno", "📖 Lee unas páginas en papel antes de dormir en vez de mirar el móvil"),
-    ("sueno", "🌡️ Baja un poco la temperatura de tu cuarto antes de acostarte"),
-    ("sueno", "⏰ Pon la alarma con margen para no empezar el día corriendo"),
-    ("sueno", "🧘 Haz 5 minutos de relajación o respiración antes de apagar la luz"),
+    ("sueno", "🐑 Cuenta ovejas con nombres absurdos hasta quedarte frita"),
+    ("sueno", 'Ponte calcetines calentitos y decláralos oficialmente tu "uniforme de dormir" 🧦'),
+    ("sueno", "🧸 Duerme con un peluche o algo blandito cerca, aunque tengas 20 años"),
+    ("sueno", "🌧️ Pon sonidos de lluvia y finge que estás de acampada en vez de en tu cuarto"),
+    ("sueno", '📵 Manda tu móvil "a dormir" a otra habitación y deséale buenas noches en voz alta'),
+    ("sueno", "🏰 Haz un fuerte con las mantas 2 minutos antes de dormir en serio"),
+    ("sueno", "😴 Cuéntale a la almohada tres cosas buenas del día antes de dormir"),
+    ("sueno", 'Baja la temperatura de tu cuarto y decláralo oficialmente "modo cueva relax" 🌡️'),
     # --- mente / mindfulness ---
-    ("mente", "🧠 Escribe 5 minutos en un diario, sin pensar en cómo suena"),
-    ("mente", "🌬️ Prueba una respiración de 4-7-8 cuando notes tensión"),
-    ("mente", "🚫 Pasa un rato sin quejarte de nada, ni en voz alta ni en tu cabeza"),
-    ("mente", "🎯 Elige una sola tarea y hazla sin multitarea durante media hora"),
-    ("mente", "🖼️ Observa algo con atención total durante 2 minutos, sin juzgarlo"),
-    ("mente", "💭 Anota un pensamiento negativo y escribe una versión más justa de él"),
-    ("mente", "🕯️ Date 10 minutos de silencio total, sin música ni notificaciones"),
-    ("mente", "🌟 Anota tres cosas que te salieron bien hoy antes de dormir"),
-    ("mente", "🤍 Háblate hoy como le hablarías a un amigo"),
-    ("mente", "🧩 Haz algo solo por diversión, sin que tenga que ser \"productivo\""),
+    ("mente", "🤪 Ponte caras raras frente al espejo hasta que te entre la risa"),
+    ("mente", "🎂 Respira hondo 5 veces imaginando que soplas las velas de un cumpleaños gigante"),
+    ("mente", "🎭 Narra tu día como si fuera el tráiler de una peli muy dramática, en broma"),
+    ("mente", "🥔 Medita 3 minutos imaginando que eres una patata sin ninguna responsabilidad"),
+    ("mente", "🛏️ Grita bajito dentro de una almohada todo lo que hoy te frustró"),
+    ("mente", "🎈 Imagina tus preocupaciones como globos y suéltalas una a una, mentalmente"),
+    ("mente", "🤡 Haz de payaso contigo misma: ríete de algo que hoy te salió mal"),
+    ("mente", "🐌 Haz algo hoy a cámara lenta a propósito, solo por el gusto de ir sin prisa"),
     # --- digital ---
-    ("digital", "📵 Pasa 2 horas seguidas sin mirar redes sociales"),
-    ("digital", "🔕 Desactiva las notificaciones de una app que te distraiga"),
-    ("digital", "⏳ Usa un temporizador y limita el móvil a 30 minutos fuera de tareas necesarias"),
-    ("digital", "📴 Deja el móvil en otra habitación mientras estudias"),
-    ("digital", "🖤 Prueba el modo blanco y negro en el móvil un rato para que enganche menos"),
-    ("digital", "📸 Vive un momento hoy sin sacar el móvil para grabarlo"),
-    ("digital", "🗑️ Borra una app que uses solo para matar el tiempo"),
-    ("digital", "💻 Cierra todas las pestañas que no estés usando ahora mismo"),
+    ("digital", "🌿 Habla con una planta en vez de mirar el móvil, aunque no te conteste"),
+    ("digital", "📴 Métete el móvil en un cajón y finge que se ha ido de vacaciones"),
+    ("digital", "🐌 Contesta un mensaje mañana en vez de ahora mismo: practica la lentitud"),
+    ("digital", "🎲 Cambia 20 minutos de scroll por un juego de mesa o de cartas, aunque sea solo/a"),
+    ("digital", '✈️ Pon el móvil en modo avión y date un "viaje" mental de 15 minutos sin él'),
+    ("digital", "✏️ Cambia 15 minutos de redes por garabatear sin sentido en un papel"),
+    ("digital", 'Hazte una foto rara (no "bonita") y ponla de fondo de pantalla un rato 🤳'),
     # --- social ---
-    ("social", "📞 Llama a alguien en vez de mandarle un mensaje"),
-    ("social", "🤗 Da las gracias a alguien de forma específica y sincera"),
-    ("social", "👂 Escucha a alguien sin mirar el móvil ni interrumpir"),
-    ("social", "✉️ Escribe a un amigo con el que hace tiempo que no hablas"),
-    ("social", "🍽️ Come con alguien en vez de solo/a, si puedes elegir"),
-    ("social", "🎁 Haz un pequeño favor a alguien sin que te lo pida"),
-    ("social", "💬 Pregunta a alguien cómo está de verdad, y espera la respuesta"),
-    ("social", "🫂 Da un abrazo a alguien hoy"),
-    ("social", "📝 Escribe una nota o mensaje bonito a alguien, sin motivo especial"),
-    ("social", "🙌 Pide ayuda con algo en vez de intentar hacerlo todo solo/a"),
+    ("social", "🎭 Imita a alguien famoso delante de un amigo y que adivine quién es"),
+    ("social", "🎤 Manda un audio cantando en vez de escribir un mensaje aburrido"),
+    ("social", 'Da un abrazo random a alguien y dile: "necesitaba practicar mi abrazo semanal" 🫂'),
+    ("social", "😂 Cuenta el chiste más malo que sepas a la primera persona que veas"),
+    ("social", "👟 Felicita a alguien por algo sin importancia, como lo bien que lleva los cordones"),
+    ("social", "📸 Manda una foto ridícula tuya a un amigo, sin ninguna razón aparente"),
+    ("social", '🗣️ Inventa un idioma random y "habla" con un amigo un minuto entero'),
     # --- estudio / productividad ---
-    ("estudio", "📚 Estudia una hora con el móvil en otra habitación"),
-    ("estudio", "🍅 Prueba la técnica Pomodoro: 25 minutos de foco, 5 de descanso"),
-    ("estudio", "🗂️ Organiza tu escritorio o tu carpeta de apuntes antes de empezar"),
-    ("estudio", "✅ Haz la tarea que más pereza te da la primera, no la última"),
-    ("estudio", "🎯 Fíjate un único objetivo claro para la sesión de estudio de hoy"),
-    ("estudio", "📅 Planifica mañana antes de acostarte hoy"),
-    ("estudio", "🧹 Deja tu mesa de estudio despejada al terminar"),
-    ("estudio", "🔁 Repasa algo de hace una semana en vez de solo lo de hoy"),
-    ("estudio", "🙅 Di que no a una distracción concreta durante tu tiempo de estudio"),
-    ("estudio", "🏁 Termina algo que tenías a medias antes de empezar algo nuevo"),
+    ("estudio", "🍅 Estudia 25 minutos y celebra el descanso con un bailecito de 30 segundos"),
+    ("estudio", "🧙 Explícate a ti misma lo que acabas de estudiar con voz de sabio o sabia"),
+    ("estudio", "🥇 Date una medalla imaginaria cada vez que termines una tarea pesada"),
+    ("estudio", "🎬 Escribe tus apuntes de hoy fingiendo que eres una influencer explicándolo en vídeo"),
+    ("estudio", "🧸 Explícale lo que has estudiado a un peluche o a la pared, en voz alta"),
+    ("estudio", "🏆 Haz un pequeño baile de la victoria por cada entrega que termines hoy"),
     # --- autocuidado ---
-    ("autocuidado", "🛁 Date un momento de cuidado personal sin prisa"),
-    ("autocuidado", "🎨 Dedica 15 minutos a algo creativo sin objetivo ninguno"),
-    ("autocuidado", "🧴 Hidrata tu piel después de ducharte"),
-    ("autocuidado", "💸 Revisa un gasto pequeño de esta semana y decide si de verdad lo necesitabas"),
-    ("autocuidado", "🧺 Ordena un rincón pequeño de tu cuarto que llevaba tiempo pendiente"),
-    ("autocuidado", "🕰️ Date permiso para no hacer nada 10 minutos, sin culpa"),
-    ("autocuidado", "🎶 Descubre una canción o artista nuevo hoy"),
-    ("autocuidado", "🧽 Limpia tu móvil o tu teclado, que los tocas todo el día"),
+    ("autocuidado", "🎤 Date una ducha cantando como si fuera un concierto solo para ti"),
+    ("autocuidado", "🖼️ Dibuja algo horrible a propósito y cuélgalo con orgullo un rato"),
+    ("autocuidado", "📺 Ponte crema hidratante narrando como si fueras un anuncio de televisión"),
+    ("autocuidado", "🪞 Baila delante del espejo evaluándote a ti misma como jurado de talent show"),
+    ("autocuidado", "🎤 Haz un mini concierto usando el cepillo del pelo de micrófono"),
+    ("autocuidado", "🎉 Celebra con confeti imaginario cualquier cosa pequeña que hayas conseguido hoy"),
+    ("autocuidado", "🧖 Ponte una mascarilla facial y siéntete una diva random durante un rato"),
     # --- aire libre / naturaleza ---
-    ("aire_libre", "🌳 Pasa al menos 15 minutos al aire libre hoy, sin móvil"),
-    ("aire_libre", "🌄 Sal a que te dé la luz de la mañana en la cara unos minutos"),
-    ("aire_libre", "🍃 Fíjate en tres cosas de la naturaleza que veas de camino a algún sitio"),
-    ("aire_libre", "🪴 Cuida una planta, aunque sea regarla y mirar cómo está"),
-    ("aire_libre", "🌦️ Sal fuera un momento aunque haga el tiempo que haga"),
-    ("aire_libre", "🏞️ Elige una ruta distinta a la habitual para pasear o ir a clase"),
+    ("aire_libre", "☁️ Sal a la calle y ponle nombre a la primera nube rara que veas"),
+    ("aire_libre", 'Silba o haz ruiditos a un pájaro y espera a ver si "te contesta" 🐦'),
+    ("aire_libre", "🍃 Persigue una hoja que vuele con el viento unos segundos, como si fueras niña"),
+    ("aire_libre", "🌧️ Sal a que te caigan cuatro gotas de lluvia sin correr a resguardarte"),
+    ("aire_libre", "🌻 Huele la primera flor random que te encuentres por la calle"),
+    ("aire_libre", "🐿️ Busca un animal por la calle (perro, gato, pájaro) y salúdalo mentalmente"),
+    ("aire_libre", "☁️ Túmbate un rato a mirar las nubes y busca formas raras en ellas"),
     # --- varios ---
-    ("varios", "💧 Lleva una botella de agua contigo todo el día"),
-    ("varios", "🧦 Prepara la ropa del día siguiente antes de dormir"),
-    ("varios", "📔 Escribe una meta pequeña para esta semana"),
-    ("varios", "🎧 Escucha un podcast o audiolibro en vez de música de fondo hoy"),
-    ("varios", "🚯 Recoge y tira algo de basura que veas por la calle"),
-    ("varios", "🧠 Aprende una palabra nueva y úsala en una frase hoy"),
+    ("varios", "🎲 Deja que una moneda decida algo pequeño hoy (qué comer, qué ruta tomar)"),
+    ("varios", "🧦 Ponte los calcetines del revés un rato a ver si notas la diferencia"),
+    ("varios", "🎭 Habla con acento random todo el día con la gente de confianza"),
+    ("varios", "🛝 Haz la croqueta por el suelo de tu cuarto, aunque sea solo un segundo"),
+    ("varios", "🎤 Grábate cantando fatal una canción y ríete al escucharte después"),
+    ("varios", "🎁 Regálate algo pequeño y gratis hoy: 10 minutos de nada, una canción, un chiste"),
+    ("varios", "🃏 Inventa una palabra nueva hoy y cuélasela a alguien en una frase"),
+    ("varios", 'Convierte una tarea aburrida en un reto de circo: "a ver si lo hago sin quejarme" 🎪'),
 ]
 
 
@@ -151,11 +140,41 @@ def reto_id(texto):
     return "r-" + hashlib.md5(normaliza(texto).encode("utf-8")).hexdigest()[:16]
 
 
+# Como cada reto nuevo tiene un ID distinto (calculado a partir de su propio texto),
+# volver a sembrar con textos NUEVOS no toca los retos de antes: se quedarían los dos
+# a la vez. Para cambiar del todo el catálogo (por ejemplo, pasar de retos serios a
+# graciosos) hay que borrar antes los que ya había. Por seguridad esto NO se hace solo:
+# hay que activarlo a propósito con BORRAR_CATALOGO_ANTERIOR=si (hay una casilla para
+# esto en GitHub Actions al lanzar el workflow a mano).
+BORRAR_ANTERIORES = os.environ.get("BORRAR_CATALOGO_ANTERIOR", "no").strip().lower() in ("si", "sí", "true", "1", "yes")
+
+
+def borra_catalogo_actual(db):
+    coll = db.collection("retos")
+    docs = list(coll.stream())
+    batch = db.batch()
+    pendientes = 0
+    for d in docs:
+        batch.delete(d.reference)
+        pendientes += 1
+        if pendientes >= 400:  # límite de Firestore por batch: 500
+            batch.commit()
+            batch = db.batch()
+            pendientes = 0
+    if pendientes:
+        batch.commit()
+    return len(docs)
+
+
 def main():
     cred_json = os.environ["FIREBASE_CREDENTIALS"]
     cred = credentials.Certificate(json.loads(cred_json))
     firebase_admin.initialize_app(cred)
     db = firestore.client()
+
+    if BORRAR_ANTERIORES:
+        borrados = borra_catalogo_actual(db)
+        print(f"BORRAR_CATALOGO_ANTERIOR estaba activado: borrados {borrados} retos del catálogo anterior.")
 
     coll = db.collection("retos")
     now_iso = datetime.now(timezone.utc).isoformat()
