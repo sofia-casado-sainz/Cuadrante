@@ -172,16 +172,31 @@ class UserSync:
             count += 1
 
             if doc_id in existing:
-                update = {
-                    "title": title,
-                    "due_at": due_at,
-                    "url": url,
-                    "course": course_map[course_key],
-                    "updated_at": now_iso,
-                }
-                if submitted:
-                    update["done"] = True
-                batch.update(ref, update)
+                prev = existing[doc_id] or {}
+                # Ojo con el cupo gratis de Firestore (límite por día): si esta tarea ya
+                # estaba guardada y no ha cambiado nada real desde la última vez, no
+                # gastamos una escritura en volver a guardar lo mismo. La inmensa
+                # mayoría de las tareas no cambian de una sincronización a la siguiente
+                # (son las mismas cada hora), así que esto reduce muchísimo el gasto.
+                cambio_a_hecha = submitted and not prev.get("done")
+                cambio_real = (
+                    prev.get("title") != title
+                    or prev.get("due_at") != due_at
+                    or prev.get("url") != url
+                    or prev.get("course") != course_map[course_key]
+                    or cambio_a_hecha
+                )
+                if cambio_real:
+                    update = {
+                        "title": title,
+                        "due_at": due_at,
+                        "url": url,
+                        "course": course_map[course_key],
+                        "updated_at": now_iso,
+                    }
+                    if submitted:
+                        update["done"] = True
+                    batch.update(ref, update)
             else:
                 new_count += 1
                 new_tasks.append({"title": title, "course": course_map[course_key]})
@@ -276,7 +291,7 @@ class UserSync:
         items = self.get_all_pages(f"{BASE}/announcements", params=params)
 
         avisos_coll = self.user_ref().collection("avisos")
-        existing_ids = {d.id for d in avisos_coll.stream()}
+        existing = {d.id: d.to_dict() for d in avisos_coll.stream()}
 
         batch = ChunkedBatch(self.db)
         count = 0
@@ -300,8 +315,15 @@ class UserSync:
                 "posted_at": it.get("posted_at"),
             }
 
-            if doc_id in existing_ids:
-                batch.update(ref, data)
+            if doc_id in existing:
+                prev = existing[doc_id] or {}
+                # Igual que en sync_tasks: si el aviso no ha cambiado desde la última
+                # vez (lo normal, hora tras hora), no gastamos una escritura en volver
+                # a guardar lo mismo — así no nos comemos el cupo gratis de Firestore.
+                cambio_real = any(prev.get(k) != v for k, v in data.items())
+                if cambio_real:
+                    data["updated_at"] = now_iso
+                    batch.update(ref, data)
             else:
                 new_count += 1
                 new_avisos.append({"title": data["title"], "course": course})
