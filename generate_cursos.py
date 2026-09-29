@@ -66,7 +66,25 @@ PERFILES = {
         "universidad": "UAH",
         "carrera": "Ingeniería de Telecomunicaciones",
     },
+    # El resto de la UFV son todas de Ingeniería Informática:
+    "9301673@alumnos.ufv.es": {
+        "universidad": "UFV",
+        "carrera": "Ingeniería Informática",
+    },
+    "9300320@alumnos.ufv.es": {
+        "universidad": "UFV",
+        "carrera": "Ingeniería Informática",
+    },
+    "9305266@alumnos.ufv.es": {
+        "universidad": "UFV",
+        "carrera": "Ingeniería Informática",
+    },
+    "9300770@alumnos.ufv.es": {
+        "universidad": "UFV",
+        "carrera": "Ingeniería Informática",
+    },
 }
+
 
 
 def pedir_cursos_a_gemini(carrera):
