@@ -318,7 +318,7 @@
         </form>
       </div>
 
-      <details style="margin-top:14px;">
+      <details id="add-sched-details" style="margin-top:14px;">
         <summary class="btn small" style="display:inline-block;">+ Añadir clase</summary>
         <form class="sched-form" id="add-sched-form">
           <div class="full">
@@ -413,7 +413,8 @@ const firebaseConfig = {
 // Solo estas cuentas pueden iniciar sesión (se comprueba también en las reglas de Firestore):
 const ALLOWED_EMAILS = [
   "9206029@alumnos.ufv.es", "ana.ecenarro@edu.uah.es",
-  "9301673@alumnos.ufv.es", "9300320@alumnos.ufv.es", "9305266@alumnos.ufv.es"
+  "9301673@alumnos.ufv.es", "9300320@alumnos.ufv.es", "9305266@alumnos.ufv.es",
+  "9300770@alumnos.ufv.es"
 ];
 // El email de quien haya iniciado sesión ahora mismo (se rellena solo al entrar):
 var myEmail = null;
@@ -423,11 +424,13 @@ const SIN_AVISOS = ["ana.ecenarro@edu.uah.es"];
 // Para que los textos digan la universidad y la plataforma de cada una, no las de la otra:
 const UNIVERSIDAD = {
   "9206029@alumnos.ufv.es": "UFV", "ana.ecenarro@edu.uah.es": "UAH",
-  "9301673@alumnos.ufv.es": "UFV", "9300320@alumnos.ufv.es": "UFV", "9305266@alumnos.ufv.es": "UFV"
+  "9301673@alumnos.ufv.es": "UFV", "9300320@alumnos.ufv.es": "UFV", "9305266@alumnos.ufv.es": "UFV",
+  "9300770@alumnos.ufv.es": "UFV"
 };
 const PLATAFORMA  = {
   "9206029@alumnos.ufv.es": "Canvas", "ana.ecenarro@edu.uah.es": "Blackboard",
-  "9301673@alumnos.ufv.es": "Canvas", "9300320@alumnos.ufv.es": "Canvas", "9305266@alumnos.ufv.es": "Canvas"
+  "9301673@alumnos.ufv.es": "Canvas", "9300320@alumnos.ufv.es": "Canvas", "9305266@alumnos.ufv.es": "Canvas",
+  "9300770@alumnos.ufv.es": "Canvas"
 };
 // Clave pública de los avisos push (la privada vive solo en un secreto de GitHub, nunca aquí):
 const VAPID_PUBLIC_KEY = "BOEqwl7bO_mQR007ETvVdl9tYRQlJSfjvmBgc3RutL8UhcWEL5mMXn6iJ0SQJXYYHySUNq_RWRqpn3WAqWaOKpk";
@@ -474,6 +477,35 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     if(!subject) return;
     var patch = {}; patch[subject] = hex;
     setDoc(doc(db,"users",myEmail,"settings","colors"), patch, {merge:true}).catch(showError);
+  }
+
+  // El desplegable de "Asignatura" (en Horario y en Tareas) ya NO es una lista fija
+  // — antes eran solo las 9 asignaturas de una persona, así que a las demás no les
+  // servía de nada. Ahora se calcula para quien haya iniciado sesión, a partir de sus
+  // propias asignaturas ya sincronizadas (tareas y avisos de Canvas/Blackboard) más
+  // las que ya tenga puestas en su propio Horario — cada una ve solo las suyas.
+  function getSubjectOptions(){
+    var set = {};
+    tasksCache.forEach(function(t){ if(t.course) set[t.course] = true; });
+    avisosCache.forEach(function(a){ if(a.course) set[a.course] = true; });
+    schedCache.forEach(function(b){ if(b.subject) set[b.subject] = true; });
+    var list = Object.keys(set);
+    list.sort(function(a,b){ return a.localeCompare(b,"es"); });
+    return list;
+  }
+  // Rellena un <select> con esas asignaturas + "Otra…", y si se le pasa un valor
+  // actual lo deja seleccionado (o cae en "Otra…" si esa asignatura ya no está en la
+  // lista, por ejemplo si viene de otro cuatrimestre). Devuelve si era conocida.
+  function renderSubjectSelect(selectEl, currentValue){
+    var options = getSubjectOptions();
+    var html = "";
+    options.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    html += '<option value="__other__">Otra…</option>';
+    selectEl.innerHTML = html;
+    if(currentValue === undefined) return true;
+    var known = options.indexOf(currentValue) !== -1;
+    selectEl.value = known ? currentValue : "__other__";
+    return known;
   }
 
   // ---------- Accesibilidad de color: que el texto se lea encima de cualquier fondo ----------
@@ -1051,7 +1083,7 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     var ed = row.querySelector(".course-editor");
     if(ed.style.display !== "none"){ ed.style.display="none"; ed.innerHTML=""; return; }
     var sel = '<select><option value="">Sin asignatura</option>';
-    SUBJECTS.forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+    getSubjectOptions().forEach(function(s){ sel += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
     sel += '</select> <button class="btn small">Guardar</button>';
     ed.innerHTML = sel; ed.style.display = "flex";
     var task = tasksCache.find(function(t){ return t.id===id; });
@@ -1237,11 +1269,14 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     }
     return {start:minH, end:maxH};
   }
-  (function(){
-    var sel = document.getElementById("sched-subject"); var html="";
-    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
-    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
-  })();
+  // Se rellena cada vez que se abre "+ Añadir clase" (no una sola vez al cargar la
+  // página), para que siempre salgan las asignaturas más al día de esta persona.
+  var addSchedDetails = document.getElementById("add-sched-details");
+  if(addSchedDetails){
+    addSchedDetails.addEventListener("toggle", function(){
+      if(this.open) renderSubjectSelect(document.getElementById("sched-subject"));
+    });
+  }
   document.getElementById("sched-subject").addEventListener("change", function(){
     document.getElementById("sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("sched-color").value = colorFor(this.value);
@@ -1281,11 +1316,8 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
   });
   document.getElementById("sched-end").min = document.getElementById("sched-start").value;
 
-  (function(){
-    var sel = document.getElementById("edit-sched-subject"); var html="";
-    SUBJECTS.forEach(function(s){ html += '<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
-    html += '<option value="__other__">Otra…</option>'; sel.innerHTML = html;
-  })();
+  // El desplegable de editar se rellena dentro de openEditSched() cada vez que se
+  // abre, con las asignaturas al día de esta persona (ver renderSubjectSelect).
   document.getElementById("edit-sched-subject").addEventListener("change", function(){
     document.getElementById("edit-sched-subject-other").style.display = (this.value==="__other__") ? "block":"none";
     if(this.value !== "__other__") document.getElementById("edit-sched-color").value = colorFor(this.value);
@@ -1297,8 +1329,7 @@ const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true })
     if(!b) return;
     editingSchedId = id;
     var sel = document.getElementById("edit-sched-subject");
-    var known = SUBJECTS.indexOf(b.subject) !== -1;
-    sel.value = known ? b.subject : "__other__";
+    var known = renderSubjectSelect(sel, b.subject);
     document.getElementById("edit-sched-subject-other").style.display = known ? "none" : "block";
     document.getElementById("edit-sched-subject-other").value = known ? "" : b.subject;
     document.getElementById("edit-sched-day").value = b.day;
